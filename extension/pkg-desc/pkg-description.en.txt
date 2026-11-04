@@ -1,0 +1,1 @@
+Reads Writer, Calc, Impress and Draw documents aloud with offline Piper neural voices, Speech Dispatcher, eSpeak NG, Windows or macOS voices. The voice follows the language of the text. Sentence highlighting, pause/resume and export to WAV, MP3 or OGG.
