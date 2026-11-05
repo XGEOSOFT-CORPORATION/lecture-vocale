@@ -1353,6 +1353,12 @@ def active_document(ctx):
     return found
 
 
+def guide_url():
+    """Adresse du guide du contributeur, livré dans l'extension."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return uno.systemPathToFileUrl(os.path.join(root, "docs", "Contributor-Guide.pdf"))
+
+
 def open_url(ctx, url):
     """Ouvre une adresse dans le navigateur ; à défaut, l'affiche pour la copier."""
     try:
@@ -2671,7 +2677,7 @@ class AboutDialog(_DialogBase):
         self._build()
         self._create()
         self.listener = _ActionListener(self.on_action)
-        self._buttons(self.listener, ["issue", "star"])
+        self._buttons(self.listener, ["issue", "star", "guide"])
 
     def _build(self):
         L, width = 10, self.W - 20
@@ -2688,11 +2694,13 @@ class AboutDialog(_DialogBase):
                   Label=_("L'extension vous rend service ? Encouragez XGEOSOFT CORPORATION "
                         "en lui donnant une étoile sur GitHub. Merci !"))
         self._add("Button", "star", L, 120, width, 15, Label=_("★ Encourager le projet sur GitHub"))
+        self._add("Button", "guide", L, self.H - 22, 130, 14, Label=_("Guide du contributeur"))
         self._add("Button", "close", self.W - 60, self.H - 22, 50, 14, Label=_("Fermer"),
                   PushButtonType=2, DefaultButton=True)
 
     def on_action(self, cmd):
-        open_url(self.ctx, ISSUES_URL if cmd == "issue" else GITHUB_URL)
+        urls = {"issue": ISSUES_URL, "star": GITHUB_URL}
+        open_url(self.ctx, urls[cmd] if cmd in urls else guide_url())
 
     def execute(self):
         if HEADLESS:

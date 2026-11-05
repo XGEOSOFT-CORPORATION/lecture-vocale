@@ -223,6 +223,24 @@ def gender(ctx, desktop):
     doc.close(True)
 
 
+def close_while_reading(ctx, desktop):
+    """Closing a document during reading, with the panel open, must leave LibreOffice alive."""
+    for attempt in range(3):
+        doc = french_document(desktop)
+        frame = doc.getCurrentController().getFrame()
+        dispatch_like_a_menu(ctx, frame, "panel")
+        offset = len(log_text())
+        dispatch(ctx, frame, "readall")
+        wait_for_log("langues:", offset)
+        time.sleep(0.4)
+        doc.close(True)
+        time.sleep(2)
+    doc = french_document(desktop)
+    started, log = read_and_stop(ctx, doc)
+    check("Closing a document during reading: LibreOffice keeps working", started, log[-300:])
+    doc.close(True)
+
+
 def scripts(ctx, desktop):
     """Non-Latin text left in the document's default language."""
     doc = open_document(desktop, "swriter")
@@ -346,6 +364,21 @@ def give_up():
     os._exit(2)
 
 
+def guide(ctx):
+    """The PDF must be where the About window looks for it, and open."""
+    packages = ctx.getValueByName("/singletons/com.sun.star.deployment.PackageInformationProvider")
+    location = packages.getPackageLocation("com.adanalytics.lecturevocale")
+    url = location + "/docs/Contributor-Guide.pdf"
+    path = uno.fileUrlToSystemPath(url)
+    check("Guide installed with the extension",
+          os.path.isfile(path) and os.path.getsize(path) > 10000, path)
+    if os.environ.get("LV_OPEN_GUIDE"):
+        shell = ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.system.SystemShellExecute", ctx)
+        shell.execute(url, "", 0)
+        check("Guide opens", True)
+
+
 def main():
     watchdog = threading.Timer(420, give_up)
     watchdog.daemon = True
@@ -354,7 +387,9 @@ def main():
     desktop = ctx.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
     print("python", sys.version.split()[0], flush=True)
     configuration(ctx)
-    for scenario in (writer, controls, gender, scripts, interface, calc, impress):
+    guide(ctx)
+    for scenario in (writer, controls, gender, close_while_reading, scripts, interface, calc,
+                     impress):
         try:
             scenario(ctx, desktop)
         except Exception as error:

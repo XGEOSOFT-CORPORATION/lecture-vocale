@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture vocale – Contributor Guide / Guide du contributeur</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 20mm 18mm;
+    @bottom-center { content: counter(page); font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7280; }
+  }
+  @page :first { @bottom-center { content: none; } }
+  :root { --accent: #1f4e8c; --ink: #1f2933; --muted: #5b6673; --line: #d5dbe3; --tint: #eef3fa; }
+  * { box-sizing: border-box; }
+  body { font: 10.5pt/1.5 "Segoe UI", Arial, sans-serif; color: var(--ink); margin: 0; }
+  a { color: var(--accent); }
+  h1 { font-size: 21pt; line-height: 1.2; color: var(--accent); margin: 0 0 4mm; font-weight: 600; }
+  h2 { font-size: 14pt; line-height: 1.25; color: var(--accent); margin: 8mm 0 2.5mm; font-weight: 600;
+       break-after: avoid; }
+  h3 { font-size: 11pt; margin: 5mm 0 1.5mm; font-weight: 600; break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 6mm; }
+  li { margin-bottom: 1mm; }
+  code { font: 9.3pt Consolas, monospace; background: var(--tint); padding: 0 1mm; border-radius: 1mm; }
+  pre { font: 9pt/1.4 Consolas, monospace; background: var(--tint); border-left: 1mm solid var(--accent);
+        padding: 2.5mm 3mm; margin: 0 0 3mm; white-space: pre-wrap; overflow-wrap: anywhere; break-inside: avoid; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 3.5mm; font-size: 9.6pt; }
+  th, td { text-align: left; vertical-align: top; padding: 1.4mm 2mm; border-bottom: .3mm solid var(--line); }
+  th { color: var(--accent); font-weight: 600; border-bottom: .5mm solid var(--accent); }
+  tr { break-inside: avoid; }
+  .part { break-before: page; }
+  .lead { font-size: 11.5pt; color: var(--muted); }
+  .note { background: var(--tint); padding: 2.5mm 3.5mm; margin: 0 0 3.5mm; break-inside: avoid; }
+  figure { margin: 0 0 3.5mm; break-inside: avoid; }
+  figcaption { font-size: 9pt; color: var(--muted); margin-top: 1mm; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: "Segoe UI", Arial, sans-serif; }
+  svg .box { fill: #eef3fa; stroke: #1f4e8c; stroke-width: 1; }
+  svg .code { font-family: Consolas, monospace; font-size: 10px; fill: #1f4e8c; font-weight: 700; }
+  svg .label { font-size: 10.5px; fill: #1f2933; }
+  svg .arrow { stroke: #1f4e8c; stroke-width: 1.4; fill: none; }
+
+  .cover { height: 245mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover h1 { font-size: 32pt; margin-bottom: 2mm; }
+  .cover .subtitle { font-size: 15pt; color: var(--muted); margin-bottom: 12mm; }
+  .cover .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; }
+  .cover h2 { margin-top: 0; font-size: 12pt; }
+  .cover ol { padding-left: 5mm; font-size: 10pt; }
+  .cover .meta { margin-top: 14mm; color: var(--muted); font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>Lecture vocale</h1>
+  <p class="subtitle">Contributor Guide &nbsp;·&nbsp; Guide du contributeur</p>
+  <div class="columns">
+    <div>
+      <h2>English</h2>
+      <ol>
+        <li><a href="#en-support">How to support the project</a></li>
+        <li><a href="#en-organisation">How the project is organised</a></li>
+        <li><a href="#en-architecture">Architecture</a></li>
+        <li><a href="#en-setup">Set up and test</a></li>
+        <li><a href="#en-contribute">How to contribute</a></li>
+        <li><a href="#en-recipes">Common changes</a></li>
+        <li><a href="#en-release">Publishing a version</a></li>
+      </ol>
+    </div>
+    <div lang="fr">
+      <h2>Français</h2>
+      <ol>
+        <li><a href="#fr-support">Comment soutenir le projet</a></li>
+        <li><a href="#fr-organisation">Organisation du projet</a></li>
+        <li><a href="#fr-architecture">Architecture</a></li>
+        <li><a href="#fr-setup">Installer et tester</a></li>
+        <li><a href="#fr-contribute">Comment contribuer</a></li>
+        <li><a href="#fr-recipes">Modifications courantes</a></li>
+        <li><a href="#fr-release">Publier une version</a></li>
+      </ol>
+    </div>
+  </div>
+  <p class="meta">Version 1.3.0 &nbsp;·&nbsp; XGEOSOFT CORPORATION &nbsp;·&nbsp; MIT License<br>
+  <a href="https://github.com/XGEOSOFT-CORPORATION/lecture-vocale">github.com/XGEOSOFT-CORPORATION/lecture-vocale</a></p>
+</section>
+
+<!-- ===================================================================== ENGLISH -->
+
+<section class="part" id="en">
+<h1>Contributor Guide</h1>
+<p class="lead">Lecture vocale reads LibreOffice documents aloud, offline, on Windows, Linux and macOS.
+This guide explains how to help, how the code is organised, and how to get a change accepted.</p>
+
+<h2 id="en-support">1. How to support the project</h2>
+<p>You do not need to write code to help. Each of these makes a real difference:</p>
+<ul>
+  <li><strong>Give the project a star</strong> on
+    <a href="https://github.com/XGEOSOFT-CORPORATION/lecture-vocale">GitHub</a>. It encourages the team and
+    helps other people find the extension.</li>
+  <li><strong>Report problems</strong> in the
+    <a href="https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/issues">issue tracker</a>. See
+    <a href="#en-bugs">how to write a useful report</a>.</li>
+  <li><strong>Test on macOS.</strong> This is the most useful help right now: the macOS code has never been
+    run on a real Mac.</li>
+  <li><strong>Review a translation.</strong> The interface exists in six languages, and native speakers have
+    not reviewed them yet.</li>
+  <li><strong>Add a language</strong> to the interface, or try voices in your own language and tell us what
+    you hear.</li>
+  <li><strong>Leave a review</strong> on the LibreOffice extensions site, and tell people who would benefit,
+    for example people with reading difficulties.</li>
+</ul>
+
+<h2 id="en-organisation">2. How the project is organised</h2>
+<table>
+  <tr><th style="width:42%">Path</th><th>Content</th></tr>
+  <tr><td><code>extension/</code></td><td>Everything that goes into the <code>.oxt</code> file</td></tr>
+  <tr><td><code>extension/python/lecture_vocale.py</code></td><td>All the extension's code, in one file</td></tr>
+  <tr><td><code>extension/python/i18n/*.json</code></td><td>Interface translations, one file per language</td></tr>
+  <tr><td><code>extension/Addons.xcu</code></td><td>Menu and toolbar</td></tr>
+  <tr><td><code>extension/Accelerators.xcu</code></td><td>Keyboard shortcuts</td></tr>
+  <tr><td><code>extension/WindowState/</code></td><td>Toolbar name and position in each application</td></tr>
+  <tr><td><code>extension/description.xml</code></td><td>Identifier, version, minimum LibreOffice version</td></tr>
+  <tr><td><code>extension/META-INF/manifest.xml</code></td><td>List of the components LibreOffice must load</td></tr>
+  <tr><td><code>build.py</code></td><td>Checks the sources and builds the <code>.oxt</code></td></tr>
+  <tr><td><code>tests/</code></td><td>Automated tests and checks in a real LibreOffice</td></tr>
+  <tr><td><code>docs/</code></td><td>This guide and its source. The PDF is also included in the <code>.oxt</code>, and opens from the About window</td></tr>
+</table>
+<p>The extension has <strong>no third-party Python dependency</strong>. LibreOffice ships its own Python
+without pip, so the code may only use the standard library and the <code>uno</code> module.</p>
+
+<h2 id="en-architecture">3. Architecture</h2>
+<h3>From a click to the sound</h3>
+<figure>
+  <svg viewBox="0 0 680 92" role="img" aria-label="Reading flow">
+    <defs><marker id="a1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#1f4e8c"/></marker></defs>
+    <rect class="box" x="1" y="10" width="100" height="62" rx="4"/><text class="label" x="51" y="36" text-anchor="middle">Menu, button</text><text class="label" x="51" y="51" text-anchor="middle">or shortcut</text>
+    <rect class="box" x="116" y="10" width="100" height="62" rx="4"/><text class="code" x="166" y="36" text-anchor="middle">run_command</text><text class="label" x="166" y="51" text-anchor="middle">Finds the action</text>
+    <rect class="box" x="231" y="10" width="105" height="62" rx="4"/><text class="code" x="283" y="36" text-anchor="middle">collect_segments</text><text class="label" x="283" y="51" text-anchor="middle">Text + language</text>
+    <rect class="box" x="351" y="10" width="100" height="62" rx="4"/><text class="code" x="401" y="36" text-anchor="middle">resolve_engine</text><text class="label" x="401" y="51" text-anchor="middle">Picks the engine</text>
+    <rect class="box" x="466" y="10" width="95" height="62" rx="4"/><text class="code" x="513" y="36" text-anchor="middle">Reader</text><text class="label" x="513" y="51" text-anchor="middle">Reading thread</text>
+    <rect class="box" x="576" y="10" width="102" height="62" rx="4"/><text class="code" x="627" y="36" text-anchor="middle">Engine</text><text class="label" x="627" y="51" text-anchor="middle">Speaks the text</text>
+    <path class="arrow" marker-end="url(#a1)" d="M101,41 H114"/><path class="arrow" marker-end="url(#a1)" d="M216,41 H229"/><path class="arrow" marker-end="url(#a1)" d="M336,41 H349"/><path class="arrow" marker-end="url(#a1)" d="M451,41 H464"/><path class="arrow" marker-end="url(#a1)" d="M561,41 H574"/>
+  </svg>
+</figure>
+<ol>
+  <li>Each menu item calls a URL such as <code>service:com.adanalytics.LectureVocale?toggle</code>.
+    LibreOffice passes the word after <code>?</code> to <code>LectureVocale.trigger</code>, which calls
+    <code>run_command</code>.</li>
+  <li><code>collect_segments</code> cuts the document into <em>segments</em>: tuples of
+    (text, object to highlight, language).</li>
+  <li><code>resolve_engine</code> takes the first engine with a voice for every language found.</li>
+  <li><code>Reader</code>, a background thread, reads the segments one by one, so LibreOffice stays
+    responsive.</li>
+</ol>
+
+<h3>Sections of lecture_vocale.py</h3>
+<p>The file is divided by comment banners, in French, in this order:</p>
+<table>
+  <tr><th style="width:42%">Section</th><th>Role</th></tr>
+  <tr><td>Configuration et journal</td><td>Settings file and log</td></tr>
+  <tr><td>Détection des outils</td><td>Finds programs, picks voices, recognises writing systems</td></tr>
+  <tr><td>Moteurs de synthèse</td><td>The <code>Engine</code> class and one subclass per engine</td></tr>
+  <tr><td>Outils UNO</td><td>Main thread calls, messages, interface language, menu titles</td></tr>
+  <tr><td>Extraction du texte à lire</td><td>Segments for Writer, Calc, Impress and Draw</td></tr>
+  <tr><td>Lecture en arrière-plan</td><td><code>Reader</code>, then start, pause and jump functions</td></tr>
+  <tr><td>Réglages rapides, Export audio</td><td>Live settings and WAV, MP3 or OGG export</td></tr>
+  <tr><td>Panneau, Boîte de dialogue, À propos</td><td><code>ReadingPanel</code>, <code>SettingsDialog</code>, <code>AboutDialog</code></td></tr>
+  <tr><td>Commandes</td><td><code>run_command</code> and the UNO entry point</td></tr>
+</table>
+
+<h3>Speech engines</h3>
+<table>
+  <tr><th>Class</th><th>Used on</th><th>How it speaks</th></tr>
+  <tr><td><code>SapiEngine</code></td><td>Windows</td><td>PowerShell, with the modern Windows speech API first, then System.Speech</td></tr>
+  <tr><td><code>SpdEngine</code></td><td>Linux</td><td><code>spd-say</code> (Speech Dispatcher)</td></tr>
+  <tr><td><code>MacSayEngine</code></td><td>macOS</td><td><code>say</code></td></tr>
+  <tr><td><code>PiperEngine</code></td><td>All</td><td>Writes a WAV file, then plays it</td></tr>
+  <tr><td><code>EspeakEngine</code></td><td>All</td><td><code>espeak-ng</code></td></tr>
+</table>
+<p>In automatic mode the system's speech service comes first, then Piper, then eSpeak NG. This order is
+<code>ENGINE_KEYS</code>.</p>
+
+<h3>Rules that keep the code working</h3>
+<ul>
+  <li><strong>Language comes first.</strong> <code>pick_voice</code> never returns a voice of another
+    language. It looks at gender only among the voices of the right language.</li>
+  <li><strong>Never fail in silence.</strong> When no voice exists for a language or gender, the engine
+    records a warning, and the user sees it once.</li>
+  <li><strong>Interface windows belong to the main thread.</strong> From <code>Reader</code>, go through
+    <code>run_in_main</code>.</li>
+  <li><strong>Pause stops the speech process</strong> and remembers the sentence. Resuming reads that sentence
+    again.</li>
+</ul>
+</section>
+
+<section>
+<h2 id="en-setup">4. Set up and test</h2>
+<p>You need Git and Python 3.8 or later. Nothing else is required to build or run the automated tests.</p>
+<pre><code>git clone https://github.com/XGEOSOFT-CORPORATION/lecture-vocale.git
+cd lecture-vocale
+python -m unittest discover -s tests
+python build.py</code></pre>
+<p>The extension is written to <code>dist/LectureVocale-&lt;version&gt;.oxt</code>. To try it, install it with
+<strong>Tools ▸ Extensions</strong> and restart LibreOffice. To remove it from a test profile:</p>
+<pre><code>unopkg remove com.adanalytics.lecturevocale</code></pre>
+
+<h3>The three levels of tests</h3>
+<table>
+  <tr><th style="width:36%">Test</th><th>What it proves</th></tr>
+  <tr><td><code>tests/test_voices.py</code></td><td>Voice choice, languages, translations, settings. No LibreOffice needed. On Windows it also renders real audio.</td></tr>
+  <tr><td><code>tests/libreoffice_check.py</code></td><td>Runs the installed extension in a real LibreOffice: menus, shortcuts, reading, pause, export and languages.</td></tr>
+  <tr><td><code>tests/speech_dispatcher_check.py</code></td><td>Records what Speech Dispatcher really outputs, and compares the pitch of female and male voices.</td></tr>
+</table>
+<p>The last two run in one command on Linux, with Docker. The first run downloads about 1 GB:</p>
+<pre><code>docker build -t lvlo-linux-test tests/linux
+docker run --rm -v "$PWD:/repo:ro" lvlo-linux-test bash /repo/tests/linux/run.sh</code></pre>
+<p>To run <code>libreoffice_check.py</code> elsewhere, follow the instructions at the top of the file. Use
+LibreOffice's own Python on Windows and macOS.</p>
+<p class="note"><strong>Tip.</strong> These tests found bugs that the automated tests could not see, such as
+shortcuts that were never registered. Run them before any change to menus, shortcuts or dialogs.</p>
+
+<h2 id="en-contribute">5. How to contribute</h2>
+<h3 id="en-bugs">Report a problem</h3>
+<p>Open an <a href="https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/issues">issue</a> and include:</p>
+<ul>
+  <li>your operating system and LibreOffice version;</li>
+  <li>the extension version and the speech engine, both shown in the extension's windows;</li>
+  <li>what you did, what you expected, and what happened;</li>
+  <li>the end of the log file.</li>
+</ul>
+<table>
+  <tr><th style="width:24%">System</th><th>Log and settings folder</th></tr>
+  <tr><td>Windows</td><td><code>%APPDATA%\lecture-vocale-libreoffice</code></td></tr>
+  <tr><td>Linux, macOS</td><td><code>~/.config/lecture-vocale-libreoffice</code></td></tr>
+</table>
+<p>The log shows the languages and voice used for each reading. Check that it holds no private text before
+you share it.</p>
+
+<h3>Propose a change</h3>
+<ol>
+  <li>For a large change, open an issue first to discuss it.</li>
+  <li>Fork the repository and create a branch, for example <code>fix/pause-on-linux</code>.</li>
+  <li>Make one focused change, and add or update a test.</li>
+  <li>Run the tests and <code>python build.py</code>.</li>
+  <li>Open a pull request: say what changes, why, and on which system you tested.</li>
+</ol>
+
+<h3>Code rules</h3>
+<ul>
+  <li><strong>Python 3.8 syntax.</strong> LibreOffice 24.2 ships Python 3.8; <code>build.py</code> rejects newer syntax.
+    The code must also run on recent versions, tested up to Python 3.13.</li>
+  <li><strong>Standard library only.</strong></li>
+  <li><strong>Every visible text goes through <code>_()</code>,</strong> in French, as a whole sentence.
+    Do not build sentences from fragments: they cannot be translated.</li>
+  <li><strong>Never use <code>_</code> as a throwaway variable.</strong> It would hide the translation function. A test
+    checks this.</li>
+  <li><strong>Match the surrounding code:</strong> comments are in French, and they explain why, not what.</li>
+</ul>
+<p>Contributions are published under the project's MIT license.</p>
+
+<h2 id="en-recipes">6. Common changes</h2>
+<h3>Add an interface language</h3>
+<ol>
+  <li>Copy <code>extension/python/i18n/en.json</code> to <code>&lt;code&gt;.json</code>. Translate the values, never the keys,
+    and keep every <code>%s</code> and <code>%d</code>.</li>
+  <li>Add the language to <code>UI_LANGUAGES</code> in <code>lecture_vocale.py</code>.</li>
+  <li>Add a <code>xml:lang</code> value to each title in <code>Addons.xcu</code>.</li>
+  <li>Add its code to <code>test_menus_are_available_in_every_language</code>, then run the tests. They check that
+    nothing is missing.</li>
+</ol>
+<h3>Add a speech engine</h3>
+<ol>
+  <li>Subclass <code>Engine</code>, with a <code>key</code> and a <code>label</code>.</li>
+  <li>Implement <code>speak_command</code>, or <code>synth</code> with <code>file_based = True</code>. Add
+    <code>supports</code> if the engine can list its voices.</li>
+  <li>Add it to <code>ENGINES</code>, <code>ENGINE_KEYS</code> and <code>_ENGINE_LABELS</code>, and translate the label.</li>
+  <li>Add tests for its commands and for language and gender choice.</li>
+</ol>
+<h3>Add a menu command</h3>
+<ol>
+  <li>Add the item to <code>Addons.xcu</code>, in every language.</li>
+  <li>Handle the command in <code>run_command</code>, and add its title to <code>MENU_TITLES</code>.</li>
+  <li>For a shortcut, use <code>Accelerators.xcu</code>. Check that no application already uses the key:
+    <code>libreoffice_check.py</code> tests this.</li>
+</ol>
+
+<h2 id="en-release">7. Publishing a version</h2>
+<ol>
+  <li>Change the version in <code>description.xml</code> and in <code>VERSION</code>. A test checks that they match.</li>
+  <li>Update the changelog in <code>README.md</code>, in both languages.</li>
+  <li>If this guide changed, run <code>python docs/build_guide.py</code>.</li>
+  <li>Run all three levels of tests, on LibreOffice 24.2 and on the latest version.</li>
+  <li>Run <code>python build.py</code>, and publish the <code>.oxt</code> on GitHub and on
+    <a href="https://extensions.libreoffice.org/en/extensions/show/99704">extensions.libreoffice.org</a>.</li>
+</ol>
+<p class="note"><strong>Never change the identifier</strong> <code>com.adanalytics.lecturevocale</code>. LibreOffice uses it to
+replace the previous version. With a new identifier, the update would install as a second extension.</p>
+</section>
+
+<!-- ===================================================================== FRANÇAIS -->
+
+<section class="part" id="fr" lang="fr">
+<h1>Guide du contributeur</h1>
+<p class="lead">Lecture vocale lit à voix haute les documents LibreOffice, hors ligne, sous Windows, Linux et
+macOS. Ce guide explique comment aider, comment le code est organisé et comment faire accepter une
+modification.</p>
+
+<h2 id="fr-support">1. Comment soutenir le projet</h2>
+<p>Pas besoin d'écrire du code pour aider. Chacune de ces actions compte vraiment :</p>
+<ul>
+  <li><strong>Donnez une étoile au projet</strong> sur
+    <a href="https://github.com/XGEOSOFT-CORPORATION/lecture-vocale">GitHub</a>. Cela encourage l'équipe et aide
+    d'autres personnes à trouver l'extension.</li>
+  <li><strong>Signalez les problèmes</strong> dans les
+    <a href="https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/issues">tickets</a>. Voyez
+    <a href="#fr-bugs">comment rédiger un signalement utile</a>.</li>
+  <li><strong>Testez sous macOS.</strong> C'est l'aide la plus utile aujourd'hui : le code macOS n'a jamais
+    tourné sur un vrai Mac.</li>
+  <li><strong>Relisez une traduction.</strong> L'interface existe en six langues, et aucun locuteur natif ne
+    les a encore relues.</li>
+  <li><strong>Ajoutez une langue</strong> à l'interface, ou essayez les voix de votre langue et dites-nous ce
+    que vous entendez.</li>
+  <li><strong>Laissez un avis</strong> sur le site des extensions LibreOffice, et parlez-en aux personnes à
+    qui l'extension peut servir, par exemple celles qui ont des difficultés de lecture.</li>
+</ul>
+
+<h2 id="fr-organisation">2. Organisation du projet</h2>
+<table>
+  <tr><th style="width:42%">Chemin</th><th>Contenu</th></tr>
+  <tr><td><code>extension/</code></td><td>Tout ce qui entre dans le fichier <code>.oxt</code></td></tr>
+  <tr><td><code>extension/python/lecture_vocale.py</code></td><td>Tout le code de l'extension, en un seul fichier</td></tr>
+  <tr><td><code>extension/python/i18n/*.json</code></td><td>Traductions de l'interface, un fichier par langue</td></tr>
+  <tr><td><code>extension/Addons.xcu</code></td><td>Menu et barre d'outils</td></tr>
+  <tr><td><code>extension/Accelerators.xcu</code></td><td>Raccourcis clavier</td></tr>
+  <tr><td><code>extension/WindowState/</code></td><td>Nom et position de la barre d'outils dans chaque application</td></tr>
+  <tr><td><code>extension/description.xml</code></td><td>Identifiant, version, version minimale de LibreOffice</td></tr>
+  <tr><td><code>extension/META-INF/manifest.xml</code></td><td>Liste des composants que LibreOffice doit charger</td></tr>
+  <tr><td><code>build.py</code></td><td>Vérifie les sources et construit le <code>.oxt</code></td></tr>
+  <tr><td><code>tests/</code></td><td>Tests automatiques et vérifications dans un vrai LibreOffice</td></tr>
+  <tr><td><code>docs/</code></td><td>Ce guide et sa source. Le PDF est aussi inclus dans le <code>.oxt</code>, et s'ouvre depuis la fenêtre À propos</td></tr>
+</table>
+<p>L'extension n'a <strong>aucune dépendance Python externe</strong>. LibreOffice embarque son propre Python,
+sans pip : le code ne peut utiliser que la bibliothèque standard et le module <code>uno</code>.</p>
+
+<h2 id="fr-architecture">3. Architecture</h2>
+<h3>Du clic au son</h3>
+<figure>
+  <svg viewBox="0 0 680 92" role="img" aria-label="Déroulement de la lecture">
+    <defs><marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#1f4e8c"/></marker></defs>
+    <rect class="box" x="1" y="10" width="100" height="62" rx="4"/><text class="label" x="51" y="36" text-anchor="middle">Menu, bouton</text><text class="label" x="51" y="51" text-anchor="middle">ou raccourci</text>
+    <rect class="box" x="116" y="10" width="100" height="62" rx="4"/><text class="code" x="166" y="36" text-anchor="middle">run_command</text><text class="label" x="166" y="51" text-anchor="middle">Trouve l'action</text>
+    <rect class="box" x="231" y="10" width="105" height="62" rx="4"/><text class="code" x="283" y="36" text-anchor="middle">collect_segments</text><text class="label" x="283" y="51" text-anchor="middle">Texte + langue</text>
+    <rect class="box" x="351" y="10" width="100" height="62" rx="4"/><text class="code" x="401" y="36" text-anchor="middle">resolve_engine</text><text class="label" x="401" y="51" text-anchor="middle">Choisit le moteur</text>
+    <rect class="box" x="466" y="10" width="95" height="62" rx="4"/><text class="code" x="513" y="36" text-anchor="middle">Reader</text><text class="label" x="513" y="51" text-anchor="middle">Fil de lecture</text>
+    <rect class="box" x="576" y="10" width="102" height="62" rx="4"/><text class="code" x="627" y="36" text-anchor="middle">Engine</text><text class="label" x="627" y="51" text-anchor="middle">Prononce le texte</text>
+    <path class="arrow" marker-end="url(#a2)" d="M101,41 H114"/><path class="arrow" marker-end="url(#a2)" d="M216,41 H229"/><path class="arrow" marker-end="url(#a2)" d="M336,41 H349"/><path class="arrow" marker-end="url(#a2)" d="M451,41 H464"/><path class="arrow" marker-end="url(#a2)" d="M561,41 H574"/>
+  </svg>
+</figure>
+<ol>
+  <li>Chaque entrée de menu appelle une adresse comme <code>service:com.adanalytics.LectureVocale?toggle</code>.
+    LibreOffice transmet le mot après <code>?</code> à <code>LectureVocale.trigger</code>, qui appelle
+    <code>run_command</code>.</li>
+  <li><code>collect_segments</code> découpe le document en <em>segments</em> : des triplets (texte, objet à
+    surligner, langue).</li>
+  <li><code>resolve_engine</code> prend le premier moteur qui a une voix pour toutes les langues trouvées.</li>
+  <li><code>Reader</code>, un fil d'exécution en arrière-plan, lit les segments un à un : LibreOffice reste
+    réactif.</li>
+</ol>
+
+<h3>Sections de lecture_vocale.py</h3>
+<p>Le fichier est découpé par des bandeaux de commentaires, dans cet ordre :</p>
+<table>
+  <tr><th style="width:42%">Section</th><th>Rôle</th></tr>
+  <tr><td>Configuration et journal</td><td>Fichier de réglages et journal</td></tr>
+  <tr><td>Détection des outils</td><td>Trouve les programmes, choisit les voix, reconnaît les écritures</td></tr>
+  <tr><td>Moteurs de synthèse</td><td>La classe <code>Engine</code> et une sous-classe par moteur</td></tr>
+  <tr><td>Outils UNO</td><td>Appels au fil principal, messages, langue de l'interface, titres des menus</td></tr>
+  <tr><td>Extraction du texte à lire</td><td>Segments pour Writer, Calc, Impress et Draw</td></tr>
+  <tr><td>Lecture en arrière-plan</td><td><code>Reader</code>, puis les fonctions de démarrage, pause et saut</td></tr>
+  <tr><td>Réglages rapides, Export audio</td><td>Réglages en direct et export WAV, MP3 ou OGG</td></tr>
+  <tr><td>Panneau, Boîte de dialogue, À propos</td><td><code>ReadingPanel</code>, <code>SettingsDialog</code>, <code>AboutDialog</code></td></tr>
+  <tr><td>Commandes</td><td><code>run_command</code> et le point d'entrée UNO</td></tr>
+</table>
+
+<h3>Moteurs vocaux</h3>
+<table>
+  <tr><th>Classe</th><th>Utilisée sous</th><th>Comment elle parle</th></tr>
+  <tr><td><code>SapiEngine</code></td><td>Windows</td><td>PowerShell, avec d'abord l'API vocale moderne de Windows, puis System.Speech</td></tr>
+  <tr><td><code>SpdEngine</code></td><td>Linux</td><td><code>spd-say</code> (Speech Dispatcher)</td></tr>
+  <tr><td><code>MacSayEngine</code></td><td>macOS</td><td><code>say</code></td></tr>
+  <tr><td><code>PiperEngine</code></td><td>Tous</td><td>Écrit un fichier WAV, puis le joue</td></tr>
+  <tr><td><code>EspeakEngine</code></td><td>Tous</td><td><code>espeak-ng</code></td></tr>
+</table>
+<p>En mode automatique, le service vocal du système passe en premier, puis Piper, puis eSpeak NG. Cet ordre
+est celui de <code>ENGINE_KEYS</code>.</p>
+
+<h3>Les règles qui font tenir le code</h3>
+<ul>
+  <li><strong>La langue d'abord.</strong> <code>pick_voice</code> ne renvoie jamais une voix d'une autre langue.
+    Le genre ne départage que les voix de la bonne langue.</li>
+  <li><strong>Jamais d'échec silencieux.</strong> Quand aucune voix n'existe pour une langue ou un genre, le
+    moteur enregistre un avertissement, que l'utilisateur voit une fois.</li>
+  <li><strong>Les fenêtres appartiennent au fil principal.</strong> Depuis <code>Reader</code>, passez par
+    <code>run_in_main</code>.</li>
+  <li><strong>La pause arrête le processus vocal</strong> et mémorise la phrase. La reprise relit cette
+    phrase.</li>
+</ul>
+</section>
+
+<section lang="fr">
+<h2 id="fr-setup">4. Installer et tester</h2>
+<p>Il vous faut Git et Python 3.8 ou plus récent. Rien d'autre n'est nécessaire pour construire l'extension et
+lancer les tests automatiques.</p>
+<pre><code>git clone https://github.com/XGEOSOFT-CORPORATION/lecture-vocale.git
+cd lecture-vocale
+python -m unittest discover -s tests
+python build.py</code></pre>
+<p>L'extension est écrite dans <code>dist/LectureVocale-&lt;version&gt;.oxt</code>. Pour l'essayer, installez-la
+avec <strong>Outils ▸ Extensions</strong> et redémarrez LibreOffice. Pour la retirer d'un profil de test :</p>
+<pre><code>unopkg remove com.adanalytics.lecturevocale</code></pre>
+
+<h3>Les trois niveaux de tests</h3>
+<table>
+  <tr><th style="width:36%">Test</th><th>Ce qu'il prouve</th></tr>
+  <tr><td><code>tests/test_voices.py</code></td><td>Choix des voix, langues, traductions, réglages. Sans LibreOffice. Sous Windows, il produit aussi de l'audio réel.</td></tr>
+  <tr><td><code>tests/libreoffice_check.py</code></td><td>Fait tourner l'extension installée dans un vrai LibreOffice : menus, raccourcis, lecture, pause, export et langues.</td></tr>
+  <tr><td><code>tests/speech_dispatcher_check.py</code></td><td>Enregistre ce que Speech Dispatcher produit réellement, et compare la hauteur des voix féminine et masculine.</td></tr>
+</table>
+<p>Les deux derniers se lancent en une commande sous Linux, avec Docker. Le premier lancement télécharge
+environ 1 Go :</p>
+<pre><code>docker build -t lvlo-linux-test tests/linux
+docker run --rm -v "$PWD:/repo:ro" lvlo-linux-test bash /repo/tests/linux/run.sh</code></pre>
+<p>Pour lancer <code>libreoffice_check.py</code> ailleurs, suivez les instructions en tête du fichier. Sous
+Windows et macOS, utilisez le Python de LibreOffice.</p>
+<p class="note"><strong>Conseil.</strong> Ces tests ont trouvé des bugs invisibles pour les tests automatiques,
+comme des raccourcis jamais enregistrés. Lancez-les avant toute modification des menus, des raccourcis ou des
+fenêtres.</p>
+
+<h2 id="fr-contribute">5. Comment contribuer</h2>
+<h3 id="fr-bugs">Signaler un problème</h3>
+<p>Ouvrez un <a href="https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/issues">ticket</a> en indiquant :</p>
+<ul>
+  <li>votre système et votre version de LibreOffice ;</li>
+  <li>la version de l'extension et le moteur vocal, visibles dans ses fenêtres ;</li>
+  <li>ce que vous avez fait, ce que vous attendiez et ce qui s'est passé ;</li>
+  <li>la fin du fichier journal.</li>
+</ul>
+<table>
+  <tr><th style="width:24%">Système</th><th>Dossier du journal et des réglages</th></tr>
+  <tr><td>Windows</td><td><code>%APPDATA%\lecture-vocale-libreoffice</code></td></tr>
+  <tr><td>Linux, macOS</td><td><code>~/.config/lecture-vocale-libreoffice</code></td></tr>
+</table>
+<p>Le journal indique les langues et la voix de chaque lecture. Vérifiez qu'il ne contient aucun texte privé
+avant de le partager.</p>
+
+<h3>Proposer une modification</h3>
+<ol>
+  <li>Pour une grosse modification, ouvrez d'abord un ticket pour en discuter.</li>
+  <li>Créez une copie (<em>fork</em>) du dépôt et une branche, par exemple <code>fix/pause-linux</code>.</li>
+  <li>Faites une seule modification ciblée, et ajoutez ou adaptez un test.</li>
+  <li>Lancez les tests et <code>python build.py</code>.</li>
+  <li>Ouvrez une <em>pull request</em> : dites ce qui change, pourquoi, et sur quel système vous avez testé.</li>
+</ol>
+
+<h3>Règles de code</h3>
+<ul>
+  <li><strong>Syntaxe Python 3.8.</strong> LibreOffice 24.2 embarque Python 3.8 ; <code>build.py</code> refuse une
+    syntaxe plus récente. Le code doit aussi tourner sur les versions récentes, testé jusqu'à Python 3.13.</li>
+  <li><strong>Bibliothèque standard uniquement.</strong></li>
+  <li><strong>Tout texte visible passe par <code>_()</code>,</strong> en français, sous forme de phrase entière.
+    Ne construisez pas de phrases par morceaux : elles seraient intraduisibles.</li>
+  <li><strong>N'utilisez jamais <code>_</code> comme variable jetable.</strong> Cela masquerait la fonction de
+    traduction. Un test le vérifie.</li>
+  <li><strong>Suivez le code existant :</strong> les commentaires sont en français et expliquent pourquoi, pas
+    quoi.</li>
+</ul>
+<p>Les contributions sont publiées sous la licence MIT du projet.</p>
+
+<h2 id="fr-recipes">6. Modifications courantes</h2>
+<h3>Ajouter une langue d'interface</h3>
+<ol>
+  <li>Copiez <code>extension/python/i18n/en.json</code> vers <code>&lt;code&gt;.json</code>. Traduisez les valeurs, jamais les
+    clés, et gardez chaque <code>%s</code> et <code>%d</code>.</li>
+  <li>Ajoutez la langue à <code>UI_LANGUAGES</code> dans <code>lecture_vocale.py</code>.</li>
+  <li>Ajoutez une valeur <code>xml:lang</code> à chaque titre de <code>Addons.xcu</code>.</li>
+  <li>Ajoutez son code à <code>test_menus_are_available_in_every_language</code>, puis lancez les tests : ils
+    vérifient que rien ne manque.</li>
+</ol>
+<h3>Ajouter un moteur vocal</h3>
+<ol>
+  <li>Créez une sous-classe de <code>Engine</code>, avec une <code>key</code> et un <code>label</code>.</li>
+  <li>Implémentez <code>speak_command</code>, ou <code>synth</code> avec <code>file_based = True</code>. Ajoutez
+    <code>supports</code> si le moteur sait lister ses voix.</li>
+  <li>Ajoutez-le à <code>ENGINES</code>, <code>ENGINE_KEYS</code> et <code>_ENGINE_LABELS</code>, et traduisez son libellé.</li>
+  <li>Ajoutez des tests pour ses commandes et pour le choix de la langue et du genre.</li>
+</ol>
+<h3>Ajouter une commande de menu</h3>
+<ol>
+  <li>Ajoutez l'entrée à <code>Addons.xcu</code>, dans toutes les langues.</li>
+  <li>Traitez la commande dans <code>run_command</code> et ajoutez son titre à <code>MENU_TITLES</code>.</li>
+  <li>Pour un raccourci, utilisez <code>Accelerators.xcu</code>. Vérifiez qu'aucune application n'utilise déjà la
+    touche : <code>libreoffice_check.py</code> le teste.</li>
+</ol>
+
+<h2 id="fr-release">7. Publier une version</h2>
+<ol>
+  <li>Changez la version dans <code>description.xml</code> et dans <code>VERSION</code>. Un test vérifie qu'elles
+    concordent.</li>
+  <li>Mettez à jour l'historique dans <code>README.md</code>, dans les deux langues.</li>
+  <li>Si ce guide a changé, lancez <code>python docs/build_guide.py</code>.</li>
+  <li>Lancez les trois niveaux de tests, sur LibreOffice 24.2 et sur la dernière version.</li>
+  <li>Lancez <code>python build.py</code>, puis publiez le <code>.oxt</code> sur GitHub et sur
+    <a href="https://extensions.libreoffice.org/en/extensions/show/99704">extensions.libreoffice.org</a>.</li>
+</ol>
+<p class="note"><strong>Ne changez jamais l'identifiant</strong> <code>com.adanalytics.lecturevocale</code>. LibreOffice
+s'en sert pour remplacer la version précédente. Avec un nouvel identifiant, la mise à jour s'installerait comme
+une seconde extension.</p>
+</section>
+
+</body>
+</html>

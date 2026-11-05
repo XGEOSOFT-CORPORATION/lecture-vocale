@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SOURCE = ROOT / "extension"
 DIST = ROOT / "dist"
+GUIDE = ROOT / "docs" / "Contributor-Guide.pdf"
 DESCRIPTION_NS = "{http://openoffice.org/extensions/description/2006}"
 MANIFEST_NS = "{http://openoffice.org/2001/manifest}"
 
@@ -36,6 +37,8 @@ def check_sources(files):
         elif path.suffix == ".py":
             # LibreOffice 24.2 embeds Python 3.8.
             ast.parse(path.read_text(encoding="utf-8"), str(path), feature_version=(3, 8))
+    if not GUIDE.is_file():
+        sys.exit("Missing guide, run: python docs/build_guide.py")
     manifest = ElementTree.parse(SOURCE / "META-INF" / "manifest.xml").getroot()
     for entry in manifest:
         listed = entry.get(MANIFEST_NS + "full-path")
@@ -52,7 +55,8 @@ def build():
         for path in files:
             archive.write(path, path.relative_to(SOURCE).as_posix())
         archive.write(ROOT / "LICENSE", "LICENSE")
-    print("%s (%d files, %d KB)" % (target, len(files) + 1, target.stat().st_size // 1024))
+        archive.write(GUIDE, "docs/" + GUIDE.name)
+    print("%s (%d files, %d KB)" % (target, len(files) + 2, target.stat().st_size // 1024))
     return target
 
 

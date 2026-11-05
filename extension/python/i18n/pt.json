@@ -39,6 +39,7 @@
  "Fermer": "Fechar",
  "Fichier audio enregistré (%d phrases, %d min %02d s) :\n%s": "Ficheiro de áudio guardado (%d frases, %d min %02d s):\n%s",
  "Formats audio incompatibles entre les phrases.": "Os formatos de áudio diferem entre frases.",
+ "Guide du contributeur": "Guia do colaborador",
  "Homme": "Masculina",
  "L'extension vous rend service ? Encouragez XGEOSOFT CORPORATION en lui donnant une étoile sur GitHub. Merci !": "A extensão é-lhe útil? Incentive a XGEOSOFT CORPORATION com uma estrela no GitHub. Obrigado!",
  "La commande « %s » a échoué (code %s).": "O comando «%s» falhou (código %s).",

@@ -39,6 +39,7 @@
  "Fermer": "Schließen",
  "Fichier audio enregistré (%d phrases, %d min %02d s) :\n%s": "Audiodatei gespeichert (%d Sätze, %d min %02d s):\n%s",
  "Formats audio incompatibles entre les phrases.": "Die Audioformate der Sätze sind unterschiedlich.",
+ "Guide du contributeur": "Leitfaden für Mitwirkende",
  "Homme": "Männlich",
  "L'extension vous rend service ? Encouragez XGEOSOFT CORPORATION en lui donnant une étoile sur GitHub. Merci !": "Hilft Ihnen die Erweiterung? Ermutigen Sie XGEOSOFT CORPORATION mit einem Stern auf GitHub. Danke!",
  "La commande « %s » a échoué (code %s).": "Der Befehl „%s“ ist fehlgeschlagen (Code %s).",

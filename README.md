@@ -160,7 +160,8 @@ python -m unittest discover -s tests
 | `extension/Addons.xcu`, `Accelerators.xcu` | Menu, toolbar and shortcuts |
 | `extension/description.xml` | Identifier, version, minimum LibreOffice version |
 | `build.py` | Builds the `.oxt` |
-| `tests/` | Automated tests, which run without LibreOffice |
+| `tests/` | Automated tests and checks in a real LibreOffice |
+| `docs/` | Contributor Guide (PDF) and its source |
 
 ### Troubleshooting
 
@@ -179,11 +180,16 @@ Does the extension help you? Encourage XGEOSOFT CORPORATION with a star on
 The **About** window has a button for each. Open it from the **Lecture vocale** menu, the reading
 panel or the settings.
 
+Want to go further? The [Contributor Guide](docs/Contributor-Guide.pdf), in English and French, explains
+how to support the project, how it is organised, and how to contribute. It is also included in the
+extension, and opens from the **About** window.
+
 ### Changelog
 
 **1.3.0**
 
 - New **About** window, with links to report a problem and to encourage the project on GitHub.
+- New Contributor Guide in English and French, included in the extension.
 - The interface is now available in six languages, follows LibreOffice by default, and has an option
   to choose another language.
 - The toolbar now has its real name, instead of "Add-on 2", and is docked at the top.
@@ -367,7 +373,8 @@ python -m unittest discover -s tests
 | `extension/Addons.xcu`, `Accelerators.xcu` | Menu, barre d'outils et raccourcis |
 | `extension/description.xml` | Identifiant, version, version minimale de LibreOffice |
 | `build.py` | Construit le `.oxt` |
-| `tests/` | Tests automatiques, qui tournent sans LibreOffice |
+| `tests/` | Tests automatiques et vérifications dans un vrai LibreOffice |
+| `docs/` | Guide du contributeur (PDF) et sa source |
 
 ### Dépannage
 
@@ -386,12 +393,17 @@ L'extension vous rend service ? Encouragez XGEOSOFT CORPORATION avec une étoile
 La fenêtre **À propos** propose un bouton pour chacun. Elle s'ouvre depuis le menu **Lecture vocale**,
 le panneau de lecture ou les paramètres.
 
+Vous voulez aller plus loin ? Le [guide du contributeur](docs/Contributor-Guide.pdf), en anglais et en
+français, explique comment soutenir le projet, comment il est organisé et comment y contribuer. Il est
+aussi inclus dans l'extension et s'ouvre depuis la fenêtre **À propos**.
+
 ### Historique des versions
 
 **1.3.0**
 
 - Nouvelle fenêtre **À propos**, avec des liens pour signaler un problème et encourager le projet sur
   GitHub.
+- Nouveau guide du contributeur en anglais et en français, inclus dans l'extension.
 - L'interface existe désormais en six langues, suit LibreOffice par défaut, et une option permet d'en
   choisir une autre.
 - La barre d'outils porte son vrai nom, au lieu de « Add-on 2 », et s'ancre en haut.

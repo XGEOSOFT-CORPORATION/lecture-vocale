@@ -11,6 +11,7 @@ import tempfile
 import threading
 import types
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -382,10 +383,13 @@ class AboutTests(unittest.TestCase):
         shell = mock.MagicMock()
         dialog = lv.AboutDialog.__new__(lv.AboutDialog)
         dialog.ctx = self.context(shell)
-        dialog.on_action("issue")
-        dialog.on_action("star")
-        self.assertEqual([call.args[0] for call in shell.execute.call_args_list],
-                         [lv.ISSUES_URL, lv.GITHUB_URL])
+        with mock.patch.object(lv.uno, "systemPathToFileUrl", create=True,
+                               side_effect=lambda path: "file:" + path):
+            for command in ("issue", "star", "guide"):
+                dialog.on_action(command)
+        urls = [call.args[0] for call in shell.execute.call_args_list]
+        self.assertEqual(urls[:2], [lv.ISSUES_URL, lv.GITHUB_URL])
+        self.assertTrue(urls[2].replace("\\", "/").endswith("/docs/Contributor-Guide.pdf"), urls[2])
 
     def test_a_missing_browser_shows_the_address(self):
         shell = mock.MagicMock()
@@ -644,6 +648,14 @@ class BuildTests(unittest.TestCase):
     def test_build_runs(self):
         subprocess.run([sys.executable, str(ROOT / "build.py")], check=True,
                        stdout=subprocess.DEVNULL)
+
+    def test_the_guide_is_in_the_extension(self):
+        subprocess.run([sys.executable, str(ROOT / "build.py")], check=True,
+                       stdout=subprocess.DEVNULL)
+        target = ROOT / "dist" / ("LectureVocale-%s.oxt" % lv.VERSION)
+        with zipfile.ZipFile(target) as archive:
+            guide = archive.read("docs/Contributor-Guide.pdf")
+        self.assertTrue(guide.startswith(b"%PDF"))
 
 
 if __name__ == "__main__":
