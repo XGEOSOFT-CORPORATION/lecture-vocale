@@ -4,7 +4,7 @@
 Moteurs : Piper (voix neuronales hors ligne), Speech Dispatcher (spd-say),
 eSpeak NG / MBROLA, Windows SAPI, voix macOS. Lecture phrase par phrase avec surlignage,
 pause/reprise, phrase précédente/suivante, réglage en direct du débit, de la
-tonalité et de la voix (femme/homme), export audio (WAV, MP3, OGG).
+tonalité et de la voix, export audio (WAV, MP3, OGG).
 
 Auteur : ADAnalytics — licence MIT.
 """
@@ -59,7 +59,7 @@ ENGINE_LABELS = [_ENGINE_LABELS[key] for key in ENGINE_KEYS]
 SPEED_MIN, SPEED_MAX, SPEED_STEP = 50, 250, 10
 PITCH_MIN, PITCH_MAX = -10, 10
 _COUNTER = itertools.count()
-CONFIG_VERSION = 2
+CONFIG_VERSION = 3
 
 # Langues de l'interface : (code, nom dans sa propre langue). Le français est la langue
 # source ; les autres viennent de python/i18n/<code>.json, qui associe le texte français
@@ -98,19 +98,13 @@ LOG_FILE = os.path.join(config_dir(), "lecture-vocale.log")
 DEFAULTS = {
     "engine": "auto",
     "piper_bin": "",
-    "piper_model": "",          # voix choisie dans la v1.0 (reste utilisée en secours)
-    "piper_model_female": "",
-    "piper_model_male": "",
+    "piper_model": "",          # voix Piper ajoutée à la main, hors des dossiers habituels
+    "voice": "",                # voix de la liste déroulante ; vide = selon la langue du texte
     "speed": 100,               # % : 100 = normal
     "pitch": 0,                 # -10 (grave) … +10 (aigu)
-    "gender": "female",         # female | male
     "language": "auto",         # auto = langue du texte, sinon code forcé (fr, en…)
     "ui_language": "auto",      # auto = langue de LibreOffice, sinon un code de UI_LANGUAGES
     "spd_module": "",
-    "spd_voice": "",
-    "espeak_voice": "",
-    "sapi_voice": "",
-    "mac_voice": "",
     "highlight": True,
     "pause_ms": 200,
     "config_version": CONFIG_VERSION,
@@ -148,15 +142,19 @@ def load_config():
             # Jusqu'à la 1.2, « fr » était une valeur par défaut enregistrée, pas un choix.
             if str(cfg["language"]).lower() == "fr":
                 cfg["language"] = "auto"
-            if str(cfg["espeak_voice"]).lower() == "fr":
-                cfg["espeak_voice"] = ""
-            cfg["config_version"] = CONFIG_VERSION
+        if data.get("config_version", 1) < 3:
+            # Jusqu'à la 1.3 de développement, chaque moteur avait son champ de voix.
+            old = [data.get(key) for key in ("sapi_voice", "mac_voice", "spd_voice")]
+            espeak = str(data.get("espeak_voice") or "")
+            old.append(espeak if espeak.startswith("mb-") else "")
+            cfg["voice"] = re.sub(r" Desktop$", "", next((v for v in old if v), ""))
+            cfg["piper_model"] = (data.get("piper_model") or data.get("piper_model_female")
+                                  or data.get("piper_model_male") or "")
+        cfg["config_version"] = CONFIG_VERSION
     except Exception:
         pass
     cfg["speed"] = _clamp(cfg["speed"], 30, 300, 100)
     cfg["pitch"] = _clamp(cfg["pitch"], PITCH_MIN, PITCH_MAX, 0)
-    if cfg["gender"] not in ("female", "male"):
-        cfg["gender"] = "female"
     return cfg
 
 
@@ -235,25 +233,12 @@ def same_language(first, second):
     return first == second or any({first, second} <= family for family in _LANGUAGE_FAMILIES)
 
 
-def pick_voice(voices, language, gender, preferred=None):
-    """Choisit une voix parmi des triplets (voix, locale, genre ou None).
-
-    La langue est impérative : aucune voix d'une autre langue n'est renvoyée.
-    Viennent ensuite la voix préférée si elle a le bon genre, le genre demandé,
-    puis la région exacte (fr-CA avant fr-FR). Renvoie (voix, genre respecté) ;
-    voix vaut None si personne ne parle cette langue.
-    """
+def pick_voice(voices, language):
+    """Identifiant de la voix de cette langue, ou None : la région exacte passe d'abord."""
     exact = (language or "").replace("_", "-").lower()
-    same = [v for v in voices if same_language(v[1], language)]
-    same.sort(key=lambda v: v[1].replace("_", "-").lower() != exact)
-    for voice in same:
-        if voice[0] == preferred and voice[2] in (gender, None):
-            return voice[0], True
-    for wanted_gender in (gender, None):
-        for voice in same:
-            if voice[2] == wanted_gender:
-                return voice[0], True
-    return (same[0][0], False) if same else (None, False)
+    same = [voice for voice in voices if same_language(voice[1], language)]
+    same.sort(key=lambda voice: voice[1].replace("_", "-").lower() != exact)
+    return same[0][0] if same else None
 
 
 # Écritures reconnues : plages Unicode, propriété LibreOffice qui porte la langue de ce
@@ -428,28 +413,10 @@ def find_models(cfg=None, refresh=False):
         _MODELS["t"] = time.time()
     models = list(_MODELS["list"])
     if cfg:
-        for key in ("piper_model_male", "piper_model_female", "piper_model"):
-            p = cfg.get(key) or ""
-            if p and os.path.isfile(p) and p not in models:
-                models.insert(0, p)
+        path = cfg.get("piper_model") or ""
+        if path and os.path.isfile(path) and path not in models:
+            models.insert(0, path)
     return models
-
-
-_FEMALE_TOKENS = {"siwis", "jessica", "female", _("femme"), "woman", "women", "girl", "fille",
-                  "amy", "kathleen", "kristin", "lessac", "ljspeech", "jenny", "alba", "cori",
-                  "kerstin", "eva", "ramona", "paola"}
-_MALE_TOKENS = {"tom", "gilles", "pierre", "male", _("homme"), "man", "men", "bernard", "boy",
-                "ryan", "alan", "joe", "john", "danny", "kusal", "norman", "thorsten",
-                "karlsson", "pavoque", "davefx", "carlfm", "riccardo", "faber", "edresson"}
-
-
-def guess_gender(path):
-    tokens = set(re.split(r"[^a-z0-9]+", os.path.basename(path or "").lower()))
-    if tokens & _FEMALE_TOKENS:
-        return "female"
-    if tokens & _MALE_TOKENS:
-        return "male"
-    return None
 
 
 _MODEL_INFO = {}
@@ -479,24 +446,22 @@ def model_language(path):
     return match.group(1) if match else ""
 
 
-def model_voices(path, cfg):
-    """Triplets pour pick_voice : une voix par locuteur identifié, sinon le modèle.
+def model_voices(path):
+    """Voix d'un modèle : (identifiant, langue), une par locuteur s'il en a plusieurs.
 
-    Une voix est un couple (modèle, numéro de locuteur ou None).
+    L'identifiant est le chemin du modèle, suivi de #numéro pour un locuteur.
     """
     language = model_language(path)
     speakers = model_info(path).get("speaker_id_map")
-    named = []
-    if isinstance(speakers, dict):
-        named = [((path, number), language, guess_gender(name))
-                 for name, number in speakers.items() if guess_gender(name)]
-    if named:
-        return named
-    gender = guess_gender(path)
-    for assigned in ("female", "male"):
-        if path == cfg.get("piper_model_" + assigned):
-            gender = assigned
-    return [((path, None), language, gender)]
+    if isinstance(speakers, dict) and len(speakers) > 1:
+        return [("%s#%s" % (path, number), language) for number in sorted(speakers.values())]
+    return [(path, language)]
+
+
+def split_voice_id(voice):
+    """« modèle.onnx#3 » → (modèle.onnx, 3) ; sans locuteur → (modèle.onnx, None)."""
+    match = re.match(r"^(.*)#(\d+)$", voice)
+    return (match.group(1), int(match.group(2))) if match else (voice, None)
 
 
 _PIPER_HELP = {}
@@ -591,9 +556,24 @@ class Engine(object):
             return forced
         return language or self.language or "fr"
 
+    def voices(self):
+        """Voix de ce moteur : tuples (identifiant, langue, …)."""
+        return []
+
+    def voice_text(self, voice):
+        """Texte de la voix dans la liste déroulante."""
+        return "%s (%s)" % (voice[0], voice[1])
+
+    def chosen_voice(self):
+        """La voix choisie dans la liste, ou None en mode automatique."""
+        wanted = self.cfg.get("voice")
+        return next((voice for voice in self.voices() if voice[0] == wanted), None)
+
     def supports(self, language=None):
-        """Ce moteur a-t-il une voix pour cette langue ?"""
-        return True
+        """Ce moteur peut-il lire cette langue ? Une voix choisie lit tout."""
+        voices = self.voices()
+        return (self.chosen_voice() is not None or not voices or
+                pick_voice(voices, self.language_for(language)) is not None)
 
     def _warn_once(self, key, message):
         if key not in self.reported:
@@ -606,14 +586,6 @@ class Engine(object):
                         "lit le texte avec son propre accent.\nInstallez une voix pour "
                         "cette langue, puis relancez LibreOffice.") % (self.label, language))
 
-    def note_missing_gender(self, language):
-        message = (_("%s n'a pas de voix d'homme pour la langue « %s » : une voix de femme "
-                   "est utilisée.") if self.gender == "male" else
-                   _("%s n'a pas de voix de femme pour la langue « %s » : une voix d'homme "
-                   "est utilisée."))
-        self._warn_once(("gender", primary_language(language), self.gender),
-                        message % (self.label, language))
-
     def take_warning(self):
         warning, self.warning = self.warning, ""
         return warning
@@ -623,10 +595,9 @@ class Engine(object):
         self.cfg = cfg
         self.speed = _clamp(cfg.get("speed", 100), 30, 300, 100)
         self.pitch = _clamp(cfg.get("pitch", 0), PITCH_MIN, PITCH_MAX, 0)
-        self.gender = cfg.get("gender", "female")
 
     def signature(self):
-        return (self.speed, self.pitch, self.gender)
+        return (self.speed, self.pitch, self.cfg.get("voice"))
 
     def describe(self):
         return self.label
@@ -661,53 +632,41 @@ class PiperEngine(Engine):
 
     def update(self, cfg):
         Engine.update(self, cfg)
-        self.model, self.speaker, self.gender_fallback = self._pick(self.language_for())
+        self.model, self.speaker = self._pick(self.language_for())
 
-    def _voices(self):
-        cfg = self.cfg
-        pool = [cfg.get("piper_model_" + self.gender), cfg.get("piper_model"),
-                cfg.get("piper_model_female"), cfg.get("piper_model_male")] + self.models
+    def voices(self):
         seen = []
-        for path in pool:
+        for path in [self.cfg.get("piper_model")] + self.models:
             if path and path not in seen and os.path.isfile(path):
                 seen.append(path)
-        return [voice for path in seen for voice in model_voices(path, cfg)]
+        return [voice for path in seen for voice in model_voices(path)]
 
-    def supports(self, language=None):
-        wanted = self.language_for(language)
-        return any(same_language(voice[1], wanted) for voice in self._voices())
+    def voice_text(self, voice):
+        path, speaker = split_voice_id(voice[0])
+        name = os.path.splitext(os.path.basename(path))[0]
+        return name if speaker is None else "%s #%d" % (name, speaker)
 
     def _pick(self, language):
-        """Renvoie (modèle, locuteur, genre non respecté)."""
-        voices = self._voices()
-        preferred = (self.cfg.get("piper_model_" + self.gender) or "", None)
-        voice, gender_ok = pick_voice(voices, language, self.gender, preferred)
+        """Renvoie (modèle, locuteur)."""
+        chosen = self.chosen_voice()
+        voices = self.voices()
+        voice = chosen[0] if chosen else pick_voice(voices, language)
         if voice is None:
-            voice = voices[0][0] if voices else ("", None)
-        return voice[0], voice[1], not gender_ok
-
-    def signature(self):
-        return Engine.signature(self) + (self.model,)
+            voice = voices[0][0] if voices else ""
+        return split_voice_id(voice)
 
     def describe(self):
         name = os.path.splitext(os.path.basename(self.model))[0]
         txt = _("Piper · voix : ") + name
-        if self.gender_fallback:
-            if self.gender == "male":
-                txt += _("\n⚠ Pas de voix Piper d'homme : installez par ex. %s") % "fr_FR-tom-medium"
-            else:
-                txt += _("\n⚠ Pas de voix Piper de femme : installez par ex. %s") % "fr_FR-siwis-medium"
-        elif self.pitch and not self.ffmpeg:
+        if self.pitch and not self.ffmpeg:
             txt += _("\n⚠ Tonalité Piper : installez ffmpeg")
         return txt
 
     def synth(self, text, wav_path, language=None):
         language = self.language_for(language)
-        model, speaker, gender_fallback = self._pick(language)
+        model, speaker = self._pick(language)
         if not self.supports(language):
             self.note_missing_language(language)
-        elif gender_fallback:
-            self.note_missing_gender(language)
         raw = wav_path + ".piper.wav" if (self.pitch and self.ffmpeg) else wav_path
         cmd = [self.bin, "-m", model, "-f", raw]
         if speaker is not None:
@@ -753,13 +712,7 @@ class SpdEngine(Engine):
         Engine.__init__(self, cfg, language)
 
     def voices(self):
-        """Voix du module (nom, locale, None) ; vide si le module ne dit rien."""
         return spd_voices(self.bin, self.cfg.get("spd_module"))
-
-    def supports(self, language=None):
-        voices = self.voices()
-        return not voices or pick_voice(voices, self.language_for(language),
-                                        self.gender)[0] is not None
 
     def _language_option(self, language):
         """La région si le module la connaît (pt-BR, en-GB), sinon la langue seule."""
@@ -774,23 +727,22 @@ class SpdEngine(Engine):
 
     def describe(self):
         mod = self.cfg.get("spd_module") or _("module par défaut")
-        voice = self.cfg.get("spd_voice") or (_("voix femme") if self.gender == "female" else _("voix homme"))
-        return "Speech Dispatcher · %s · %s" % (mod, voice)
+        chosen = self.chosen_voice()
+        return "Speech Dispatcher · %s · %s" % (mod, chosen[0] if chosen else _("voix par défaut"))
 
     def speak_command(self, text, language=None):
         language = self.language_for(language)
+        chosen = self.chosen_voice()
         if not self.supports(language):
             self.note_missing_language(language)
+        # Le module ne garde une voix que si la langue demandée est la sienne.
+        spoken = chosen[1] if chosen else self._language_option(language)
         cmd = [self.bin, "-w", "-r", str(max(-100, min(100, self.speed - 100))),
-               "-p", str(self.pitch * 10), "-l", self._language_option(language)]
+               "-p", str(self.pitch * 10), "-l", spoken]
         if self.cfg.get("spd_module"):
             cmd += ["-o", self.cfg["spd_module"]]
-        voice = self.cfg.get("spd_voice")
-        names = [v[0] for v in self.voices() if same_language(v[1], language)]
-        if voice and (voice in names or not self.voices()):
-            cmd += ["-y", voice]
-        else:
-            cmd += ["-t", "female1" if self.gender == "female" else "male1"]
+        if chosen:
+            cmd += ["-y", chosen[0]]
         if text.startswith("-"):
             text = " " + text
         return cmd + [text], None
@@ -803,12 +755,17 @@ class SpdEngine(Engine):
 
 
 def parse_spd_voices(output):
-    """Voix listées par « spd-say -L » (colonnes NOM LANGUE VARIANTE)."""
+    """Voix listées par « spd-say -L » (colonnes NOM LANGUE VARIANTE).
+
+    Les variantes (Afrikaans+Adam…) sont écartées : eSpeak NG en compte des milliers.
+    """
     voices = []
     for line in output.splitlines():
         fields = line.split()
         if len(fields) >= 3 and fields[0] != "NAME":
-            voices.append((" ".join(fields[:-2]), fields[-2], None))
+            name = " ".join(fields[:-2])
+            if "+" not in name:
+                voices.append((name, fields[-2]))
     return voices
 
 
@@ -834,8 +791,22 @@ def spd_voices(program, module=""):
     return voices
 
 
-_MBROLA_FEMALE = {"mb-fr2", "mb-fr4"}
-_MBROLA_MALE = {"mb-fr1", "mb-fr3", "mb-fr5", "mb-fr6", "mb-fr7"}
+_ESPEAK_VOICE = re.compile(r"^\s*\d+\s+(\S+)\s+\S+\s+(\S+)")
+
+
+def parse_espeak_voices(output):
+    """Voix listées par « espeak-ng --voices » : (identifiant, langue, nom lisible)."""
+    voices = []
+    for line in output.splitlines():
+        match = _ESPEAK_VOICE.match(line)
+        if match:
+            language, name = match.groups()
+            voices.append((name if name.startswith("mb-") else language, language,
+                           name.replace("_", " ")))
+    return voices
+
+
+_ESPEAK_VOICES = []
 
 
 class EspeakEngine(Engine):
@@ -849,20 +820,23 @@ class EspeakEngine(Engine):
                 "espeak-ng", "espeak-ng", _("installez eSpeak NG (github.com/espeak-ng/espeak-ng/releases)")))
         Engine.__init__(self, cfg, language)
 
+    def voices(self):
+        if not _ESPEAK_VOICES:
+            for option in ("--voices", "--voices=mb"):
+                try:
+                    out = subprocess.run([self.bin, option], capture_output=True, timeout=10,
+                                         creationflags=NO_WINDOW).stdout
+                    _ESPEAK_VOICES.extend(parse_espeak_voices(out.decode("utf-8", "replace")))
+                except Exception as exc:
+                    log("voix eSpeak:", exc)
+        return _ESPEAK_VOICES
+
+    def voice_text(self, voice):
+        return "%s (%s)" % (voice[2], voice[1])
+
     def voice(self, language=None):
-        wanted = primary_language(self.language_for(language))
-        base = (self.cfg.get("espeak_voice") or "").strip()
-        low = base.lower()
-        spoken = low[3:].rstrip("0123456789") if low.startswith("mb-") else low.split("+")[0]
-        if primary_language(spoken) != wanted:
-            base = low = wanted     # la voix réglée ne parle pas la langue du texte
-        if low.startswith("mb-"):
-            if self.gender == "female" and low in _MBROLA_MALE:
-                return "mb-fr4"
-            if self.gender == "male" and low in _MBROLA_FEMALE:
-                return "mb-fr1"
-            return base
-        return base.split("+")[0] + ("+f3" if self.gender == "female" else "+m3")
+        chosen = self.chosen_voice()
+        return chosen[0] if chosen else primary_language(self.language_for(language))
 
     def describe(self):
         return _("eSpeak NG · voix : ") + self.voice()
@@ -884,6 +858,8 @@ class EspeakEngine(Engine):
 
 
 _SAPI_VOICES = []
+# Une fin de script ordinaire peut rester bloquée dans le nettoyage des objets vocaux.
+_EXIT_NOW = "[Environment]::Exit(0)"
 
 
 _WINRT_SYNTH = "[Windows.Media.SpeechSynthesis.SpeechSynthesizer]"
@@ -895,7 +871,7 @@ _WINRT_LOAD = ("Add-Type -AssemblyName System.Runtime.WindowsRuntime; "
 
 
 def parse_sapi_voices(output):
-    """Lignes nom|locale|genre|source ; une voix présente deux fois garde sa première source.
+    """Lignes nom|locale|source ; une voix présente deux fois garde sa première source.
 
     « Microsoft Paul » (API moderne) et « Microsoft Paul Desktop » (SAPI) sont la même voix.
     """
@@ -903,19 +879,17 @@ def parse_sapi_voices(output):
     seen = set()
     for line in output.lstrip("\ufeff").splitlines():
         fields = line.strip().split("|")
-        if len(fields) != 4:
+        if len(fields) != 3:
             continue
-        name, culture, gender, source = fields
-        same_voice = re.sub(r" Desktop$", "", name)
+        same_voice = re.sub(r" Desktop$", "", fields[0])
         if same_voice not in seen:
             seen.add(same_voice)
-            voices.append((name, culture,
-                           gender.lower() if gender in ("Female", "Male") else None, source))
+            voices.append(tuple(fields))
     return voices
 
 
 def sapi_voices():
-    """Toutes les voix Windows : (nom, locale, genre, source), lues une seule fois.
+    """Toutes les voix Windows : (nom, locale, source), lues une seule fois.
 
     System.Speech ne voit qu'une partie des voix : celles ajoutées depuis les Paramètres
     de Windows ne sont visibles que par l'API moderne, utilisée en priorité.
@@ -923,11 +897,11 @@ def sapi_voices():
     if not _SAPI_VOICES:
         script = ("[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
                   "try { " + _WINRT_LOAD + "; foreach ($v in " + _WINRT_SYNTH + "::AllVoices) { "
-                  "$v.DisplayName + '|' + $v.Language + '|' + $v.Gender + '|winrt' } } catch {}; "
+                  "$v.DisplayName + '|' + $v.Language + '|winrt' } } catch {}; "
                   "Add-Type -AssemblyName System.Speech; "
                   "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
                   "foreach ($v in $s.GetInstalledVoices()) { if ($v.Enabled) { $i = $v.VoiceInfo; "
-                  "$i.Name + '|' + $i.Culture.Name + '|' + $i.Gender + '|sapi' } }")
+                  "$i.Name + '|' + $i.Culture.Name + '|sapi' } }")
         try:
             out = subprocess.run([powershell(), "-NoProfile", "-NonInteractive", "-Command", script],
                                  capture_output=True, timeout=30, creationflags=NO_WINDOW).stdout
@@ -946,22 +920,17 @@ class SapiEngine(Engine):
             raise EngineError(_("Windows SAPI n'existe que sous Windows."))
         Engine.__init__(self, cfg, language)
 
-    def supports(self, language=None):
-        voices = sapi_voices()
-        return not voices or pick_voice(voices, self.language_for(language),
-                                        self.gender)[0] is not None
+    def voices(self):
+        return sapi_voices()
 
     def _voice(self, language):
-        """Nom de la voix pour cette langue ; None laisse la voix par défaut du système."""
-        voices = sapi_voices()
-        preferred = self.cfg.get("sapi_voice") or ""
-        if preferred not in [voice[0] for voice in voices]:
-            preferred = re.sub(r" Desktop$", "", preferred)     # nom enregistré par la 1.2
-        name, gender_ok = pick_voice(voices, language, self.gender, preferred or None)
+        """Nom de la voix à utiliser ; None laisse la voix par défaut du système."""
+        chosen = self.chosen_voice()
+        if chosen:
+            return chosen[0]
+        name = pick_voice(self.voices(), language)
         if name is None:
             self.note_missing_language(language)
-        elif not gender_ok:
-            self.note_missing_gender(language)
         return name
 
     def describe(self):
@@ -971,7 +940,7 @@ class SapiEngine(Engine):
         """Synthèse par l'API moderne : la voix, le débit et la tonalité sont tous respectés."""
         await_op = ("function Await($op, $type) { "
                     "$task = $asTask.MakeGenericMethod($type).Invoke($null, @($op)); "
-                    "$null = $task.Wait(-1); $task.Result }")
+                    "if (-not $task.Wait(60000)) { throw 'speech timeout' }; $task.Result }")
         as_task = ("$asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | "
                    "Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and "
                    "$_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]")
@@ -996,11 +965,12 @@ class SapiEngine(Engine):
         else:
             lines.append("(New-Object Media.SoundPlayer (New-Object IO.MemoryStream(,$b)))"
                          ".PlaySync()")
+        lines.append(_EXIT_NOW)
         return "; ".join(lines)
 
     def _script(self, text_file, wav_path=None, language=None):
         voice = self._voice(self.language_for(language))
-        if (voice, "winrt") in [(v[0], v[3]) for v in sapi_voices()]:
+        if (voice, "winrt") in [(v[0], v[2]) for v in sapi_voices()]:
             return self._winrt_script(voice, text_file, wav_path)
         rate = max(-10, min(10, int(round((self.speed - 100) / 10.0))))
         lines = ["$ErrorActionPreference = 'Stop'",
@@ -1016,12 +986,13 @@ class SapiEngine(Engine):
         lines.append("Remove-Item -LiteralPath '%s' -ErrorAction SilentlyContinue"
                      % text_file.replace("'", "''"))
         # xml:lang doit être celui de la voix choisie : SAPI remplace sinon cette voix
-        # par la première voix de la langue indiquée, quel que soit son genre.
+        # par la première voix de la langue indiquée.
         lines.append("$x = '<speak version=\"1.0\" xmlns=\"http://www.w3.org/2001/10/synthesis\" "
                      "xml:lang=\"' + $s.Voice.Culture.Name + '\"><prosody pitch=\"%+d%%\">' + $t + "
                      "'</prosody></speak>'" % (self.pitch * 5))
         lines.append("$s.SpeakSsml($x)")
         lines.append("$s.Dispose()")
+        lines.append(_EXIT_NOW)
         return "; ".join(lines)
 
     def _text_file(self, text):
@@ -1035,63 +1006,22 @@ class SapiEngine(Engine):
                  "-Command", self._script(self._text_file(text), None, language)], None)
 
     def synth(self, text, wav_path, language=None):
-        subprocess.run([powershell(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
-                        "Bypass", "-Command",
-                        self._script(self._text_file(text), wav_path, language)],
-                       capture_output=True, timeout=600, creationflags=NO_WINDOW)
+        try:
+            subprocess.run([powershell(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
+                            "Bypass", "-Command",
+                            self._script(self._text_file(text), wav_path, language)],
+                           capture_output=True, timeout=120, creationflags=NO_WINDOW)
+        except subprocess.TimeoutExpired:
+            log("synthèse Windows bloquée:", wav_path)     # l'audio est peut-être déjà écrit
         if not os.path.isfile(wav_path):
             raise EngineError(_("SAPI n'a pas produit d'audio."))
-
-
-_MAC_FEMALE = {"amélie", "amelie", "audrey", "aurélie", "aurelie", "marie", "virginie",
-               "samantha", "karen", "moira", "tessa", "anna", "alice", "monica", "paulina"}
-_MAC_MALE = {"thomas", "jacques", "nicolas", "daniel", "alex", "fred", "tom", "aaron",
-             "arthur", "reed", "rocko", "eddy", "grandpa", "jorge", "luca", "markus"}
-
-
-def mac_gender(name):
-    base = name.split(" (")[0].lower()
-    return "female" if base in _MAC_FEMALE else "male" if base in _MAC_MALE else None
-
-
-_MAC_ATTRIBUTES_SCRIPT = """ObjC.import('AppKit');
-var voices = $.NSSpeechSynthesizer.availableVoices, out = [];
-for (var i = 0; i < voices.count; i++) {
-  var a = $.NSSpeechSynthesizer.attributesForVoice(voices.objectAtIndex(i));
-  out.push(ObjC.unwrap(a.objectForKey('VoiceName')) + '|'
-           + ObjC.unwrap(a.objectForKey('VoiceGender')));
-}
-out.join('\\n')"""
-
-
-def parse_mac_genders(output):
-    """Lignes nom|VoiceGenderFemale : dictionnaire nom → female, male ou None."""
-    genders = {}
-    for line in output.splitlines():
-        name, unused, gender = line.strip().rpartition("|")
-        genders[name] = {"VoiceGenderFemale": "female", "VoiceGenderMale": "male"}.get(gender)
-    return genders
-
-
-def mac_system_genders():
-    """Genre déclaré par macOS pour chaque voix, quelle que soit sa langue."""
-    osascript = _which("osascript")
-    if not osascript:
-        return {}
-    try:
-        out = subprocess.run([osascript, "-l", "JavaScript", "-e", _MAC_ATTRIBUTES_SCRIPT],
-                             capture_output=True, timeout=15).stdout
-        return parse_mac_genders(out.decode("utf-8", "replace"))
-    except Exception as exc:
-        log("genres macOS:", exc)
-        return {}
 
 
 _MAC_VOICES = []
 
 
 def mac_voices():
-    """Voix installées sous macOS : liste de (nom, locale, genre), lue une seule fois."""
+    """Voix installées sous macOS : liste de (nom, locale), lue une seule fois."""
     if not _MAC_VOICES:
         _MAC_VOICES.extend(_read_mac_voices())
     return _MAC_VOICES
@@ -1101,7 +1031,6 @@ def _read_mac_voices():
     say = _which("say")
     if not say:
         return []
-    genders = mac_system_genders()
     try:
         out = subprocess.run([say, "-v", "?"], capture_output=True, timeout=15).stdout
     except Exception as exc:
@@ -1111,8 +1040,7 @@ def _read_mac_voices():
     for line in out.decode("utf-8", "replace").splitlines():
         m = re.match(r"^(.+?)\s+([a-z]{2,3}[_-][A-Za-z0-9]+)\s+#", line)
         if m:
-            name = m.group(1).strip()
-            voices.append((name, m.group(2), genders.get(name) or mac_gender(name)))
+            voices.append((m.group(1).strip(), m.group(2)))
     return voices
 
 
@@ -1126,26 +1054,22 @@ class MacSayEngine(Engine):
         self.bin = _which("say")
         if not self.bin:
             raise EngineError(_("Commande « say » introuvable."))
-        self.voices = mac_voices()
         Engine.__init__(self, cfg, language)
 
     def update(self, cfg):
         Engine.update(self, cfg)
         self.voice = self._pick(self.language_for()) or ""
 
-    def supports(self, language=None):
-        return not self.voices or pick_voice(self.voices, self.language_for(language),
-                                             self.gender)[0] is not None
+    def voices(self):
+        return mac_voices()
 
     def _pick(self, language):
-        explicit = (self.cfg.get("mac_voice") or "").strip()
-        if not self.voices:
-            return explicit
-        name, gender_ok = pick_voice(self.voices, language, self.gender, explicit or None)
+        chosen = self.chosen_voice()
+        if chosen or not self.voices():
+            return chosen[0] if chosen else ""
+        name = pick_voice(self.voices(), language)
         if name is None:
             self.note_missing_language(language)
-        elif not gender_ok:
-            self.note_missing_gender(language)
         return name
 
     def signature(self):
@@ -1295,7 +1219,6 @@ MENU_TITLES = {"menu": "Lecture ~vocale", "quick": "Réglages rapides",
                "next": "Phrase suivante", "panel": "Panneau de lecture (débit, tonalité, voix)…",
                "faster": "Débit +  (plus rapide)", "slower": "Débit −  (plus lent)",
                "pitchup": "Tonalité +  (plus aiguë)", "pitchdown": "Tonalité −  (plus grave)",
-               "female": "Voix femme", "male": "Voix homme",
                "resetvoice": "Débit et tonalité normaux",
                "export": "Enregistrer en fichier audio…", "settings": "Paramètres avancés…",
                "about": "À propos / diagnostic"}
@@ -2005,8 +1928,7 @@ def apply_live(ctx, announce=True, **changes):
         panel = ReadingPanel.instance
         run_in_main(ctx, panel.sync)
     if announce:
-        flash_status(ctx, _("débit %d %% · tonalité %+d · voix %s")
-                     % (cfg["speed"], cfg["pitch"], _("femme") if cfg["gender"] == "female" else _("homme")))
+        flash_status(ctx, _("débit %d %% · tonalité %+d") % (cfg["speed"], cfg["pitch"]))
     return cfg
 
 
@@ -2020,8 +1942,6 @@ def quick_setting(ctx, command):
         return apply_live(ctx, pitch=min(PITCH_MAX, cfg["pitch"] + 1))
     if command == "pitchdown":
         return apply_live(ctx, pitch=max(PITCH_MIN, cfg["pitch"] - 1))
-    if command in ("female", "male"):
-        return apply_live(ctx, gender=command)
     if command == "resetvoice":
         return apply_live(ctx, speed=100, pitch=0)
     return None
@@ -2197,6 +2117,15 @@ class _CloseListener(unohelper.Base, XTopWindowListener):
     def disposing(self, e): pass
 
 
+def voice_choices(cfg):
+    """Moteur utilisé et voix proposées dans la liste déroulante."""
+    try:
+        engine = resolve_engine(dict(cfg, voice=""))
+    except EngineError:
+        return None, []
+    return engine, sorted(engine.voices(), key=lambda voice: engine.voice_text(voice).lower())
+
+
 class _DialogBase(object):
     """Petite aide pour construire des boîtes de dialogue UNO en code."""
 
@@ -2232,6 +2161,26 @@ class _DialogBase(object):
     def ctl(self, name):
         return self.dialog.getControl(name)
 
+    def _fill_voice_list(self, cfg):
+        """Remplit la liste déroulante « voice » et y sélectionne la voix choisie."""
+        engine, voices = voice_choices(cfg)
+        self.voice_ids = [voice[0] for voice in voices]
+        labels = [_("Automatique (selon la langue du texte)")]
+        labels += [engine.voice_text(voice) for voice in voices]
+        box = self.ctl("voice")
+        box.removeItems(0, box.getItemCount())
+        box.addItems(tuple(labels), 0)
+        self._select_voice(cfg)
+
+    def _select_voice(self, cfg):
+        wanted = cfg.get("voice")
+        position = self.voice_ids.index(wanted) + 1 if wanted in self.voice_ids else 0
+        self.ctl("voice").selectItemPos(position, True)
+
+    def _selected_voice(self):
+        position = self.ctl("voice").getSelectedItemPos()
+        return self.voice_ids[position - 1] if position > 0 else ""
+
     def _buttons(self, listener, names):
         for name in names:
             c = self.ctl(name)
@@ -2253,6 +2202,7 @@ class ReadingPanel(_DialogBase):
         self.pending = {}
         self.timer = None
         self.alive = True
+        self.voice_source = None
         self._build()
         parent = None
         try:
@@ -2269,8 +2219,7 @@ class ReadingPanel(_DialogBase):
         self.ctl("speed").addAdjustmentListener(self.adjust)
         self.ctl("pitch").addAdjustmentListener(self.adjust)
         self.items = _ItemListener(self.on_item)
-        self.ctl("female").addItemListener(self.items)
-        self.ctl("male").addItemListener(self.items)
+        self.ctl("voice").addItemListener(self.items)
         self.closer = _CloseListener(self.close)
         try:
             self.dialog.addTopWindowListener(self.closer)
@@ -2301,8 +2250,8 @@ class ReadingPanel(_DialogBase):
                       HelpText=_("Valeur normale"))
             y += 17
         self._add("FixedText", "lvoice", x0, y + 1, 36, 10, Label=_("Voix"))
-        self._add("RadioButton", "female", x0 + 38, y, 50, 11, Label=_("Femme"))
-        self._add("RadioButton", "male", x0 + 92, y, 50, 11, Label=_("Homme"))
+        self._add("ListBox", "voice", x0 + 38, y - 1, self.W - x0 * 2 - 38, 13, Dropdown=True,
+                  LineCount=12)
         y += 16
         self._add("FixedText", "info", x0, y, self.W - 12, 22, MultiLine=True, TextColor=0x707070)
         by = self.H - 20
@@ -2330,8 +2279,12 @@ class ReadingPanel(_DialogBase):
             self.model.getByName("speed").ScrollValue = cfg["speed"]
             self.model.getByName("pitch").ScrollValue = cfg["pitch"]
             self._labels(cfg["speed"], cfg["pitch"])
-            self.ctl("female").setState(cfg["gender"] == "female")
-            self.ctl("male").setState(cfg["gender"] == "male")
+            source = (cfg.get("engine"), cfg.get("spd_module"), cfg.get("piper_model"))
+            if source != self.voice_source:
+                self.voice_source = source
+                self._fill_voice_list(cfg)
+            else:
+                self._select_voice(cfg)
             self._info(cfg)
         finally:
             self.syncing = False
@@ -2417,8 +2370,7 @@ class ReadingPanel(_DialogBase):
     def on_item(self, name):
         if self.syncing:
             return
-        if self.ctl(name).getState():
-            apply_live(self.ctx, announce=False, gender=name)
+        apply_live(self.ctx, announce=False, voice=self._selected_voice())
 
     def close(self):
         if not self.alive:
@@ -2451,8 +2403,29 @@ class ReadingPanel(_DialogBase):
 # Boîte de dialogue des paramètres
 # --------------------------------------------------------------------------
 
+def forget_voices():
+    """Oublie les listes de voix, pour voir une voix qui vient d'être installée."""
+    for voices in (_SAPI_VOICES, _MAC_VOICES, _ESPEAK_VOICES):
+        del voices[:]
+    _SPD_VOICES.clear()
+
+
+def voice_sample(cfg):
+    """Moteur, langue et texte du bouton Tester.
+
+    Une voix choisie est testée dans sa propre langue, pour qu'on l'entende vraiment.
+    """
+    language = _UI["language"] if cfg["language"].lower() == "auto" else cfg["language"]
+    engine = resolve_engine(cfg, language=language)
+    chosen = engine.chosen_voice()
+    if chosen:
+        language = chosen[1]
+    strings = load_ui_strings(resolve_ui_language(language, ""))
+    return engine, language, strings.get(SAMPLE_TEXT, SAMPLE_TEXT)
+
+
 class SettingsDialog(_DialogBase):
-    W, H = 300, 298
+    W, H = 300, 284
 
     def __init__(self, ctx):
         self._init_model(ctx, _("Lecture vocale — paramètres"), self.W, self.H)
@@ -2461,8 +2434,9 @@ class SettingsDialog(_DialogBase):
         self._create()
         self._fill()
         self.listener = _ActionListener(self.on_action)
-        self._buttons(self.listener, ["btnPiper", "btnModelF", "btnModelM", "btnTest", "btnRefresh",
-                                      "btnAbout"])
+        self._buttons(self.listener, ["btnPiper", "btnModel", "btnTest", "btnRefresh", "btnAbout"])
+        self.items = _ItemListener(self.on_item)
+        self.ctl("engine").addItemListener(self.items)
 
     def _build(self):
         L, F = 8, 96
@@ -2476,6 +2450,9 @@ class SettingsDialog(_DialogBase):
         self._add("FixedText", "lEngine", L, y + 2, 86, 10, Label=_("Moteur de synthèse"))
         self._add("ListBox", "engine", F, y, W + 22, 13, Dropdown=True,
                   StringItemList=tuple(_(label) for label in ENGINE_LABELS))
+        y += 20
+        self._add("FixedText", "lVoice", L, y + 2, 86, 10, Label=_("Voix"))
+        self._add("ListBox", "voice", F, y, W + 22, 13, Dropdown=True, LineCount=14)
         y += 22
         self._add("FixedLine", "fl1", L, y, self.W - 16, 8, Label=_("Piper (voix neuronales)"))
         y += 12
@@ -2483,13 +2460,9 @@ class SettingsDialog(_DialogBase):
         self._add("Edit", "piper_bin", F, y, W, 13)
         self._add("Button", "btnPiper", F + W + 4, y, 18, 13, Label="…")
         y += 17
-        self._add("FixedText", "lModelF", L, y + 2, 86, 10, Label=_("Voix femme (.onnx)"))
-        self._add("ComboBox", "piper_model_female", F, y, W, 13, Dropdown=True)
-        self._add("Button", "btnModelF", F + W + 4, y, 18, 13, Label="…")
-        y += 17
-        self._add("FixedText", "lModelM", L, y + 2, 86, 10, Label=_("Voix homme (.onnx)"))
-        self._add("ComboBox", "piper_model_male", F, y, W, 13, Dropdown=True)
-        self._add("Button", "btnModelM", F + W + 4, y, 18, 13, Label="…")
+        self._add("FixedText", "lModel", L, y + 2, 86, 10, Label=_("Voix supplémentaire (.onnx)"))
+        self._add("ComboBox", "piper_model", F, y, W, 13, Dropdown=True)
+        self._add("Button", "btnModel", F + W + 4, y, 18, 13, Label="…")
         y += 21
         self._add("FixedLine", "fl2", L, y, self.W - 16, 8, Label=_("Réglages par défaut"))
         y += 12
@@ -2502,10 +2475,8 @@ class SettingsDialog(_DialogBase):
                   ValueMax=float(PITCH_MAX), ValueStep=1.0, DecimalAccuracy=0, Spin=True,
                   StrictFormat=True)
         y += 17
-        self._add("FixedText", "lGender", L, y + 2, 86, 10, Label=_("Voix"))
-        self._add("ListBox", "gender", F, y, 50, 13, Dropdown=True, StringItemList=(_("Femme"), _("Homme")))
-        self._add("FixedText", "lLang", F + 56, y + 2, 32, 10, Label=_("Langue"))
-        self._add("Edit", "language", F + 90, y, 36, 13,
+        self._add("FixedText", "lLang", L, y + 2, 86, 10, Label=_("Langue"))
+        self._add("Edit", "language", F, y, 40, 13,
                   HelpText=_("auto = langue du texte ; ou un code pour la forcer : fr, en, de…"))
         y += 17
         self._add("CheckBox", "highlight", F, y, W + 22, 12,
@@ -2516,19 +2487,6 @@ class SettingsDialog(_DialogBase):
         self._add("FixedText", "lSpdMod", L, y + 2, 86, 10, Label=_("Module spd-say"))
         self._add("Edit", "spd_module", F, y, 70, 13,
                   HelpText=_("vide = module par défaut ; ex. espeak-ng-mbrola-generic, piper"))
-        self._add("FixedText", "lSpdVoice", F + 76, y + 2, 24, 10, Label=_("Voix"))
-        self._add("ComboBox", "spd_voice", F + 100, y, W - 78, 13, Dropdown=True,
-                  HelpText=_("vide = voix choisie selon la langue et le genre"))
-        y += 17
-        self._add("FixedText", "lEspeak", L, y + 2, 86, 10,
-                  Label=_("Voix eSpeak") + (" / SAPI" if IS_WIN else " / macOS" if IS_MAC else ""))
-        self._add("Edit", "espeak_voice", F, y, 70, 13, HelpText=_("vide = langue du texte ; ex. fr, mb-fr4 (MBROLA)"))
-        if IS_WIN:
-            self._add("ComboBox", "sapi_voice", F + 76, y, W - 54, 13, Dropdown=True,
-                      HelpText=_("vide = voix choisie selon la langue et le genre"))
-        if IS_MAC:
-            self._add("ComboBox", "mac_voice", F + 76, y, W - 54, 13, Dropdown=True,
-                      HelpText=_("vide = voix choisie selon la langue et le genre"))
         y += 19
         self._add("FixedText", "detect", L, y, self.W - 16, 20, MultiLine=True, TextColor=0x606060)
         by = self.H - 20
@@ -2550,42 +2508,19 @@ class SettingsDialog(_DialogBase):
         self._fill_models()
         self.ctl("speed").setValue(float(c.get("speed", 100)))
         self.ctl("pitch").setValue(float(c.get("pitch", 0)))
-        self.ctl("gender").selectItemPos(1 if c.get("gender") == "male" else 0, True)
         self.ctl("language").setText(c.get("language", "auto"))
         self.ctl("highlight").setState(1 if c.get("highlight", True) else 0)
         self.ctl("spd_module").setText(c.get("spd_module", ""))
-        spd = _which("spd-say") if not IS_WIN and not IS_MAC else ""
-        self._fill_voices("spd_voice", spd_voices(spd, c.get("spd_module")) if spd else [])
-        self.ctl("spd_voice").setText(c.get("spd_voice", ""))
-        self.ctl("espeak_voice").setText(c.get("espeak_voice", ""))
-        if IS_WIN:
-            self._fill_voices("sapi_voice", sapi_voices())
-            self.ctl("sapi_voice").setText(c.get("sapi_voice", ""))
-        if IS_MAC:
-            self._fill_voices("mac_voice", mac_voices())
-            self.ctl("mac_voice").setText(c.get("mac_voice", ""))
+        self._fill_voice_list(c)
         self._detect()
-
-    def _fill_voices(self, control, voices):
-        if voices:
-            self.ctl(control).addItems(tuple(voice[0] for voice in voices), 0)
 
     def _fill_models(self, refresh=False):
         models = find_models(self.cfg, refresh)
-        for g in ("female", "male"):
-            combo = self.ctl("piper_model_" + g)
-            combo.removeItems(0, combo.getItemCount())
-            if models:
-                combo.addItems(tuple(models), 0)
-            current = self.cfg.get("piper_model_" + g) or ""
-            if not current:
-                guesses = [m for m in models if guess_gender(m) == g]
-                if guesses:
-                    current = guesses[0]
-                elif g == "female" and self.cfg.get("piper_model") \
-                        and guess_gender(self.cfg["piper_model"]) != "male":
-                    current = self.cfg["piper_model"]
-            combo.setText(current)
+        combo = self.ctl("piper_model")
+        combo.removeItems(0, combo.getItemCount())
+        if models:
+            combo.addItems(tuple(models), 0)
+        combo.setText(self.cfg.get("piper_model") or "")
 
     def _detect(self):
         self.model.getByName("detect").Label = _("Détecté : ") + detection_summary(self.read())
@@ -2597,21 +2532,18 @@ class SettingsDialog(_DialogBase):
         pos = self.ctl("engine").getSelectedItemPos()
         c["engine"] = ENGINE_KEYS[pos] if 0 <= pos < len(ENGINE_KEYS) else "auto"
         c["piper_bin"] = self.ctl("piper_bin").getText().strip()
-        c["piper_model_female"] = self.ctl("piper_model_female").getText().strip()
-        c["piper_model_male"] = self.ctl("piper_model_male").getText().strip()
+        c["piper_model"] = self.ctl("piper_model").getText().strip()
+        c["voice"] = self._selected_voice()
         c["speed"] = _clamp(self.ctl("speed").getValue(), SPEED_MIN, SPEED_MAX, 100)
         c["pitch"] = _clamp(self.ctl("pitch").getValue(), PITCH_MIN, PITCH_MAX, 0)
-        c["gender"] = "male" if self.ctl("gender").getSelectedItemPos() == 1 else "female"
         c["language"] = self.ctl("language").getText().strip() or "auto"
         c["highlight"] = self.ctl("highlight").getState() == 1
         c["spd_module"] = self.ctl("spd_module").getText().strip()
-        c["spd_voice"] = self.ctl("spd_voice").getText().strip()
-        c["espeak_voice"] = self.ctl("espeak_voice").getText().strip()
-        if IS_WIN:
-            c["sapi_voice"] = self.ctl("sapi_voice").getText().strip()
-        if IS_MAC:
-            c["mac_voice"] = self.ctl("mac_voice").getText().strip()
         return c
+
+    def on_item(self, name):
+        """Un autre moteur a d'autres voix."""
+        self._fill_voice_list(self.read())
 
     def on_action(self, cmd):
         if cmd == "btnPiper":
@@ -2619,27 +2551,28 @@ class SettingsDialog(_DialogBase):
             if path:
                 self.ctl("piper_bin").setText(path)
                 self._detect()
-        elif cmd in ("btnModelF", "btnModelM"):
+        elif cmd == "btnModel":
             path, unused = file_dialog(self.ctx, filters=[(_("Voix Piper (*.onnx)"), "*.onnx")],
                                   title=_("Choisir une voix Piper"))
             if path:
                 if not os.path.isfile(path + ".json"):
                     msgbox(self.ctx, _("Le fichier %s.json doit se trouver à côté de la voix.")
                            % os.path.basename(path), "warningbox")
-                self.ctl("piper_model_" + ("female" if cmd == "btnModelF" else "male")).setText(path)
+                self.ctl("piper_model").setText(path)
+                self._fill_voice_list(self.read())
                 self._detect()
         elif cmd == "btnAbout":
             AboutDialog(self.ctx).execute()
         elif cmd == "btnRefresh":
             self.cfg = self.read()
+            forget_voices()
             self._fill_models(refresh=True)
+            self._fill_voice_list(self.cfg)
             self._detect()
         elif cmd == "btnTest":
             cfg = self.read()
-            language = _UI["language"] if cfg["language"].lower() == "auto" else cfg["language"]
-            sample = _(SAMPLE_TEXT)
             try:
-                engine = resolve_engine(cfg, language=language)
+                engine, language, sample = voice_sample(cfg)
             except EngineError as exc:
                 msgbox(self.ctx, str(exc), "errorbox")
                 return
@@ -2714,7 +2647,7 @@ class AboutDialog(_DialogBase):
 # Commandes
 # --------------------------------------------------------------------------
 
-QUICK = ("faster", "slower", "pitchup", "pitchdown", "female", "male", "resetvoice")
+QUICK = ("faster", "slower", "pitchup", "pitchdown", "resetvoice")
 
 
 def run_command(ctx, command):
@@ -2744,6 +2677,16 @@ def run_command(ctx, command):
             dlg = SettingsDialog(ctx)
             log("selftest dialogue ok:", json.dumps(dlg.read(), ensure_ascii=False))
             dlg.dialog.dispose()
+            voices = voice_choices(load_config())[1]
+            log("voix disponibles:", json.dumps([list(voice[:2]) for voice in voices],
+                                                ensure_ascii=False))
+            panel = ReadingPanel.show(ctx)
+            panel.ctl("voice").selectItemPos(1, True)
+            panel.on_item("voice")
+            log("voix du panneau:", load_config()["voice"])
+            panel.ctl("voice").selectItemPos(0, True)
+            panel.on_item("voice")
+            panel.close()
             return
         if command == "about":
             AboutDialog(ctx).execute()

@@ -23,10 +23,10 @@ computer: no account, no internet connection, and your text never leaves your ma
   Korean and Russian.
 - **The voice follows the language of the text**, sentence by sentence. A French paragraph in an
   English document gets a French voice.
-- **Female or male voice**, using the gender declared by the system for each voice.
+- **A drop-down list of all available voices**, in the reading panel and the settings.
 - **Pause and resume** at the same sentence, and jump to the next or previous sentence.
 - **Highlighting** of the sentence being read.
-- **Reading panel** to change speed, pitch and female/male voice while reading.
+- **Reading panel** to change speed, pitch and voice while reading.
 - **Audio export** to WAV, and to MP3 or OGG when ffmpeg is installed.
 - **Reading mode per application**: sentence by sentence in Writer, row by row in Calc, shape by
   shape in Impress and Draw.
@@ -101,14 +101,18 @@ install a voice:
   covers about a hundred languages. Run `spd-say -L` to list the available voices.
 - **Piper**: download a voice (the `.onnx` file and its `.onnx.json`) from
   [piper-voices](https://huggingface.co/rhasspy/piper-voices), for example `fr_FR-siwis-medium`
-  (female) or `fr_FR-tom-medium` (male), and select it in the settings.
+  or `fr_FR-tom-medium`, and select it in the settings.
 
-The settings list the voices installed on your computer. Leave the field empty to let the language
-and the gender decide. A voice you pick is used only for its own language and gender.
+The **Voice** list, in the reading panel and the settings, shows the voices available on your computer:
 
-A female or male voice can only be used if the system has one for that language. The extension tells
-you when it has to use the other gender. With Speech Dispatcher, the gender depends on the module:
-`speech-dispatcher-espeak-ng` offers both.
+- **Automatic**, the default: the voice follows the language of the text, sentence by sentence.
+- **A voice from the list**: that voice reads everything, even text in another language. It will then
+  read with its own accent.
+
+The **Test** button in the settings plays the chosen voice in its own language. After installing a new
+voice, click **Detect again** in the settings.
+
+With Speech Dispatcher, the list shows the main voice of each language of the module in use.
 
 Pitch control depends on the engine:
 
@@ -194,8 +198,7 @@ extension, and opens from the **About** window.
   to choose another language.
 - The toolbar now has its real name, instead of "Add-on 2", and is docked at the top.
 - Fixed: text could be read by a voice of the wrong language, usually English.
-- Fixed: the female/male choice was ignored by Windows voices, and Piper could use a voice of the
-  wrong gender.
+- Fixed: the chosen voice could be ignored, on Windows in particular.
 - Fixed: keyboard shortcuts did not work at all. Stop is now Ctrl+Alt+Shift+S and the reading
   panel Ctrl+Alt+Shift+O, because K and P are taken in Impress and Draw.
 - Fixed: "Open a document first" could appear while a document was open.
@@ -203,7 +206,6 @@ extension, and opens from the **About** window.
   only that sentence, and typing could replace it.
 - Fixed: settings changed quickly during reading could be lost on Windows.
 - Windows: all installed voices are now available, not only the older ones, with real pitch control.
-- macOS: the gender of each voice now comes from the system, for all languages.
 - Linux: Speech Dispatcher is now the default engine, and regional variants such as pt-BR are used.
 - All languages: Asian and complex scripts are now recognized, and a Latin-only language setting no
   longer mislabels Russian, Arabic or Japanese text.
@@ -211,8 +213,8 @@ extension, and opens from the **About** window.
 - In automatic mode, the system's speech service comes first, and an engine is skipped if it has no
   voice for one of the document's languages. **If you use Piper**, select it in the settings.
 - The settings list the installed voices.
-- A message now tells you when no voice exists for a language or gender.
-- Piper: multi-speaker voices are supported, and more voices are recognized as female or male.
+- A message now tells you when no voice exists for a language.
+- Piper: each speaker of a multi-speaker voice appears in the voice list.
 - LibreOffice 24.2 is now the minimum version.
 
 ### License
@@ -233,10 +235,10 @@ ordinateur : pas de compte, pas de connexion Internet, et votre texte ne quitte 
   coréen, l'hindi, le japonais et le russe.
 - **La voix suit la langue du texte**, phrase par phrase. Un paragraphe en français dans un document
   anglais est lu par une voix française.
-- **Voix féminine ou masculine**, d'après le genre déclaré par le système pour chaque voix.
+- **Une liste déroulante de toutes les voix disponibles**, dans le panneau de lecture et les paramètres.
 - **Pause et reprise** à la même phrase, et passage à la phrase suivante ou précédente.
 - **Surlignage** de la phrase en cours de lecture.
-- **Panneau de lecture** pour régler le débit, la tonalité et la voix femme/homme pendant la lecture.
+- **Panneau de lecture** pour régler le débit, la tonalité et la voix pendant la lecture.
 - **Export audio** en WAV, et en MP3 ou OGG si ffmpeg est installé.
 - **Mode de lecture adapté** : phrase par phrase dans Writer, ligne par ligne dans Calc, forme par
   forme dans Impress et Draw.
@@ -312,14 +314,19 @@ installez une voix :
   couvre une centaine de langues. La commande `spd-say -L` liste les voix disponibles.
 - **Piper** : téléchargez une voix (le fichier `.onnx` et son `.onnx.json`) sur
   [piper-voices](https://huggingface.co/rhasspy/piper-voices), par exemple `fr_FR-siwis-medium`
-  (femme) ou `fr_FR-tom-medium` (homme), et choisissez-la dans les paramètres.
+  ou `fr_FR-tom-medium`, et choisissez-la dans les paramètres.
 
-Les paramètres listent les voix installées sur votre ordinateur. Laissez le champ vide pour que la
-langue et le genre décident. Une voix choisie n'est utilisée que pour sa langue et son genre.
+La liste **Voix**, dans le panneau de lecture et les paramètres, affiche les voix disponibles sur votre
+ordinateur :
 
-Une voix féminine ou masculine n'est utilisable que si le système en a une pour cette langue.
-L'extension vous prévient quand elle doit utiliser l'autre genre. Avec Speech Dispatcher, le genre
-dépend du module : `speech-dispatcher-espeak-ng` propose les deux.
+- **Automatique**, par défaut : la voix suit la langue du texte, phrase par phrase.
+- **Une voix de la liste** : cette voix lit tout, même un texte dans une autre langue. Elle le lira alors
+  avec son propre accent.
+
+Le bouton **Tester** des paramètres fait entendre la voix choisie dans sa propre langue. Après avoir
+installé une voix, cliquez sur **Redétecter** dans les paramètres.
+
+Avec Speech Dispatcher, la liste affiche la voix principale de chaque langue du module utilisé.
 
 Le réglage de la tonalité dépend du moteur :
 
@@ -408,8 +415,7 @@ aussi inclus dans l'extension et s'ouvre depuis la fenêtre **À propos**.
   choisir une autre.
 - La barre d'outils porte son vrai nom, au lieu de « Add-on 2 », et s'ancre en haut.
 - Corrigé : le texte pouvait être lu par une voix de la mauvaise langue, le plus souvent l'anglais.
-- Corrigé : le choix femme/homme était ignoré par les voix Windows, et Piper pouvait utiliser une
-  voix du mauvais genre.
+- Corrigé : la voix choisie pouvait être ignorée, en particulier sous Windows.
 - Corrigé : les raccourcis clavier ne fonctionnaient pas du tout. Arrêter devient Ctrl+Alt+Maj+S et
   le panneau Ctrl+Alt+Maj+O, car K et P sont déjà pris dans Impress et Draw.
 - Corrigé : « Ouvrez d'abord un document » pouvait apparaître alors qu'un document était ouvert.
@@ -418,7 +424,6 @@ aussi inclus dans l'extension et s'ouvre depuis la fenêtre **À propos**.
 - Corrigé : des réglages changés rapidement pendant la lecture pouvaient se perdre sous Windows.
 - Windows : toutes les voix installées sont disponibles, pas seulement les plus anciennes, avec un
   vrai réglage de la tonalité.
-- macOS : le genre de chaque voix vient désormais du système, pour toutes les langues.
 - Linux : Speech Dispatcher devient le moteur par défaut, et les variantes régionales comme pt-BR
   sont utilisées.
 - Toutes les langues : les écritures asiatiques et complexes sont reconnues, et un texte russe, arabe
@@ -428,9 +433,8 @@ aussi inclus dans l'extension et s'ouvre depuis la fenêtre **À propos**.
   pas de voix pour l'une des langues du document. **Si vous utilisez Piper**, choisissez-le dans les
   paramètres.
 - Les paramètres listent les voix installées.
-- Un message prévient quand aucune voix n'existe pour une langue ou un genre.
-- Piper : prise en charge des voix à plusieurs locuteurs, et davantage de voix reconnues comme
-  féminines ou masculines.
+- Un message prévient quand aucune voix n'existe pour une langue.
+- Piper : chaque locuteur d'une voix à plusieurs locuteurs apparaît dans la liste des voix.
 - LibreOffice 24.2 est désormais la version minimale.
 
 ### Licence

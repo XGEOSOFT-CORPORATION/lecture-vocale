@@ -137,7 +137,7 @@ def writer(ctx, desktop):
     check("Writer: exported audio has a realistic length", 2 < seconds < 30, "%.1f s" % seconds)
 
     frame = doc.getCurrentController().getFrame()
-    dispatch(ctx, frame, "selftest")
+    check("Settings dialog returns", dispatch_like_a_menu(ctx, frame, "selftest"))
     check("Settings dialog builds", "selftest dialogue ok" in log_text())
     doc.close(True)
 
@@ -207,20 +207,49 @@ def controls(ctx, desktop):
     doc.close(True)
 
 
-def gender(ctx, desktop):
-    """Isabelle Dutailly's report: the chosen gender and language must be obeyed."""
-    expected = os.environ.get("LV_EXPECT_VOICES")
-    if not expected:
-        return
-    female, male = expected.split(",")
-    doc = french_document(desktop)
+def every_voice(ctx, desktop):
+    """Each voice of the list reads a real document, to the end, and gets exported."""
+    offset = len(log_text())
+    doc = open_document(desktop, "swriter")
     frame = doc.getCurrentController().getFrame()
-    for command, voice in (("male", male), ("female", female)):
-        dispatch(ctx, frame, command)
-        started, log = read_and_stop(ctx, doc)
-        line = next((item for item in log.splitlines() if "langues:" in item), "")
-        check("Gender: %s voice on French text" % command, voice in line, line)
+    check("Voice list and panel work", dispatch_like_a_menu(ctx, frame, "selftest"))
+    match = re.search(r"voix disponibles: (\[.*\])", log_text()[offset:])
+    voices = json.loads(match.group(1)) if match else []
+    check("Voices are listed", len(voices) > 0, len(voices))
+    panel = re.search(r"voix du panneau: (.*)", log_text()[offset:])
+    check("Panel list saves the voice", panel is not None and panel.group(1).strip() == voices[0][0],
+          panel.group(1) if panel else "")
     doc.close(True)
+
+    every = int(os.environ.get("LV_VOICE_STEP", "1"))
+    config = os.path.join(os.path.dirname(LOG), "config.json")
+    with open(config, encoding="utf-8") as source:
+        saved = json.load(source)
+    heard = set()
+    tested = voices[::every]
+    for name, language in tested:
+        with open(config, "w", encoding="utf-8") as target:
+            json.dump(dict(saved, voice=name), target)
+        doc = french_document(desktop)
+        frame = doc.getCurrentController().getFrame()
+        offset = len(log_text())
+        dispatch(ctx, frame, "readall")
+        finished = wait_for_log("index=3/3 ok=True", offset, 40)
+        line = next((item for item in log_text()[offset:].splitlines() if "langues:" in item), "")
+        check("Voice reads a document: " + name, finished and name in line, line[-90:])
+        check("Voice shows no error: " + name, "errorbox" not in log_text()[offset:])
+        if os.environ.get("LV_EXPECT_ENGINE") == "sapi":
+            offset = len(log_text())
+            dispatch(ctx, frame, "export")
+            check("Voice exports audio: " + name, wait_for_log("export ok", offset, 40))
+            with open(WAV, "rb") as source:
+                heard.add(source.read())
+        doc.close(True)
+    if os.environ.get("LV_EXPECT_ENGINE") == "sapi":
+        check("Every voice has its own sound", len(heard) == len(tested),
+              "%d / %d" % (len(heard), len(tested)))
+    with open(config, "w", encoding="utf-8") as target:
+        json.dump(saved, target)
 
 
 def close_while_reading(ctx, desktop):
@@ -295,7 +324,7 @@ def interface(ctx, desktop):
         check("Interface follows LibreOffice by default", wait_for_log(automatic, offset, 10),
               log_text()[offset:][-200:])
     offset = len(log_text())
-    dispatch(ctx, frame, "selftest")
+    dispatch_like_a_menu(ctx, frame, "selftest")
     check("Settings dialog builds with the new option", "selftest dialogue ok" in log_text()[offset:])
     doc.close(True)
 
@@ -380,7 +409,7 @@ def guide(ctx):
 
 
 def main():
-    watchdog = threading.Timer(420, give_up)
+    watchdog = threading.Timer(600, give_up)
     watchdog.daemon = True
     watchdog.start()
     ctx = connect()
@@ -388,7 +417,7 @@ def main():
     print("python", sys.version.split()[0], flush=True)
     configuration(ctx)
     guide(ctx)
-    for scenario in (writer, controls, gender, close_while_reading, scripts, interface, calc,
+    for scenario in (writer, controls, every_voice, close_while_reading, scripts, interface, calc,
                      impress):
         try:
             scenario(ctx, desktop)

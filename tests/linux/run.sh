@@ -14,7 +14,7 @@ echo "=== build"; python3 build.py
 echo "=== speech dispatcher"; python3 tests/speech_dispatcher_check.py virtual.monitor
 
 echo "=== libreoffice"
-export LECTURE_VOCALE_HEADLESS=1 LECTURE_VOCALE_EXPORT_PATH=/tmp/export.wav LV_EXPECT_ENGINE=spd LV_EXPECT_AUTO_MESSAGE="Nothing to read"
+export LECTURE_VOCALE_HEADLESS=1 LECTURE_VOCALE_EXPORT_PATH=/tmp/export.wav LV_EXPECT_ENGINE=spd LV_VOICE_STEP=20 LV_EXPECT_AUTO_MESSAGE="Nothing to read"
 PROFILE=file:///tmp/lo-profile
 unopkg add -v "-env:UserInstallation=$PROFILE" dist/LectureVocale-*.oxt 2>&1 | tail -3
 unopkg list "-env:UserInstallation=$PROFILE" 2>&1 | grep -iE 'Identifier|Version|Registered'

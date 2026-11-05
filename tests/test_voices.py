@@ -49,40 +49,31 @@ def load_extension():
 
 lv = load_extension()
 
-FRENCH_ONLY_MAN = [("Paul", "fr-FR", "male"), ("Zira", "en-US", "female")]
-WINDOWS_VOICES = [("David", "en-US", "male", "sapi"), ("Zira", "en-US", "female", "sapi"),
-                  ("Hortense", "fr-FR", "female", "sapi")]
+WINDOWS_VOICES = [("David", "en-US", "sapi"), ("Zira", "en-US", "sapi"),
+                  ("Hortense", "fr-FR", "sapi")]
 
 
 class PickVoiceTests(unittest.TestCase):
-    def test_language_comes_first(self):
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "fr-FR", "male"), ("Hortense", False))
-
-    def test_gender_inside_the_language(self):
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "en-GB", "male"), ("David", True))
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "en-GB", "female"), ("Zira", True))
+    def test_language_decides(self):
+        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "fr-FR"), "Hortense")
+        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "en-GB"), "David")
 
     def test_never_a_voice_of_another_language(self):
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "de-DE", "female"), (None, False))
+        self.assertIsNone(lv.pick_voice(WINDOWS_VOICES, "de-DE"))
 
     def test_case_and_separator_do_not_matter(self):
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "FR", "female")[0], "Hortense")
-        self.assertEqual(lv.pick_voice([("A", "fr_CA", None)], "fr", "male"), ("A", True))
+        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "FR"), "Hortense")
+        self.assertEqual(lv.pick_voice([("A", "fr_CA")], "fr"), "A")
+
+    def test_exact_region_wins(self):
+        voices = [("F", "fr-FR"), ("C", "fr-CA")]
+        self.assertEqual(lv.pick_voice(voices, "fr-CA"), "C")
 
     def test_two_codes_for_one_language(self):
-        self.assertEqual(lv.pick_voice([("Li", "cmn", "female")], "zh-CN", "female")[0], "Li")
-        self.assertEqual(lv.pick_voice([("Wei", "zh-CN", "male")], "cmn", "male")[0], "Wei")
-        self.assertEqual(lv.pick_voice([("Ola", "no", None)], "nb-NO", "male")[0], "Ola")
-        self.assertIsNone(lv.pick_voice([("Li", "cmn", "female")], "ja", "female")[0])
-
-    def test_exact_region_wins_at_equal_gender(self):
-        voices = [("F", "fr-FR", "female"), ("C", "fr-CA", "female")]
-        self.assertEqual(lv.pick_voice(voices, "fr-CA", "female")[0], "C")
-
-    def test_preferred_voice_needs_language_and_gender(self):
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "en-US", "female", "Zira")[0], "Zira")
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "en-US", "male", "Zira")[0], "David")
-        self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "fr-FR", "female", "Zira")[0], "Hortense")
+        self.assertEqual(lv.pick_voice([("Li", "cmn")], "zh-CN"), "Li")
+        self.assertEqual(lv.pick_voice([("Wei", "zh-CN")], "cmn"), "Wei")
+        self.assertEqual(lv.pick_voice([("Ola", "no")], "nb-NO"), "Ola")
+        self.assertIsNone(lv.pick_voice([("Li", "cmn")], "ja"))
 
 
 class PiperTests(unittest.TestCase):
@@ -112,30 +103,15 @@ class PiperTests(unittest.TestCase):
     def test_english_model_is_not_used_for_french(self):
         ryan = self.model("en_US-ryan-medium", "en_US")
         tom = self.model("fr_FR-tom-medium", "fr_FR")
-        engine = self.engine([ryan, tom], gender="male")
-        self.assertEqual(engine.model, tom)
+        self.assertEqual(self.engine([ryan, tom]).model, tom)
 
-    def test_female_voice_of_the_language_is_chosen(self):
-        siwis = self.model("fr_FR-siwis-medium", "fr_FR")
+    def test_chosen_model_reads_everything(self):
+        ryan = self.model("en_US-ryan-medium", "en_US")
         tom = self.model("fr_FR-tom-medium", "fr_FR")
-        amy = self.model("en_US-amy-medium", "en_US")
-        engine = self.engine([tom, amy, siwis], gender="female")
-        self.assertEqual(engine.model, siwis)
-        self.assertFalse(engine.gender_fallback)
-
-    def test_gender_fallback_stays_in_the_language(self):
-        tom = self.model("fr_FR-tom-medium", "fr_FR")
-        amy = self.model("en_US-amy-medium", "en_US")
-        engine = self.engine([amy, tom], gender="female")
-        self.assertEqual(engine.model, tom)
-        self.assertTrue(engine.gender_fallback)
-
-    def test_configured_model_of_another_language_is_ignored(self):
-        amy = self.model("en_US-amy-medium", "en_US")
-        siwis = self.model("fr_FR-siwis-medium", "fr_FR")
-        engine = self.engine([amy, siwis], gender="female", piper_model_female=amy)
-        self.assertEqual(engine.model, siwis)
-        self.assertEqual(engine._pick("en-US")[0], amy)
+        engine = self.engine([ryan, tom], voice=ryan)
+        self.assertEqual(engine.model, ryan)
+        self.assertEqual(engine._pick("fr-FR"), (ryan, None))
+        self.assertTrue(engine.supports("de"))
 
     def test_reports_a_language_without_model(self):
         ryan = self.model("en_US-ryan-medium", "en_US")
@@ -143,10 +119,12 @@ class PiperTests(unittest.TestCase):
         self.assertFalse(engine.supports("fr-FR"))
         self.assertTrue(engine.supports("en-GB"))
 
-    def test_speaker_of_a_multi_speaker_model(self):
+    def test_each_speaker_is_a_voice(self):
         upmc = self.model("fr_FR-upmc-medium", "fr_FR", {"jessica": 0, "pierre": 1})
-        self.assertEqual(self.engine([upmc], gender="male").speaker, 1)
-        self.assertEqual(self.engine([upmc], gender="female").speaker, 0)
+        engine = self.engine([upmc], voice=upmc + "#1")
+        self.assertEqual([voice[0] for voice in engine.voices()], [upmc + "#0", upmc + "#1"])
+        self.assertEqual(engine.speaker, 1)
+        self.assertEqual(engine.voice_text(engine.voices()[1]), "fr_FR-upmc-medium #1")
 
     def test_language_from_file_name_without_json(self):
         path = self.dir / "de_DE-thorsten-high.onnx"
@@ -159,58 +137,64 @@ class EngineTests(unittest.TestCase):
         which = mock.patch.object(lv, "_which", side_effect=lambda *names: names[0])
         which.start()
         self.addCleanup(which.stop)
+        lv._ESPEAK_VOICES[:] = [("fr-fr", "fr-fr", "French (France)"), ("en-gb", "en-gb", "English"),
+                                ("mb-fr4", "fr", "mb-fr4")]
+        self.addCleanup(lv._ESPEAK_VOICES.clear)
 
     def test_espeak_follows_the_text(self):
         engine = lv.EspeakEngine(dict(lv.DEFAULTS))
-        self.assertEqual(engine.voice("en-GB"), "en+f3")
-        self.assertEqual(engine.voice("fr-FR"), "fr+f3")
+        self.assertEqual(engine.voice("en-GB"), "en")
+        self.assertEqual(engine.voice("fr-FR"), "fr")
 
-    def test_espeak_gender(self):
-        engine = lv.EspeakEngine(dict(lv.DEFAULTS, gender="male"))
-        self.assertEqual(engine.voice("fr"), "fr+m3")
+    def test_espeak_chosen_voice_reads_everything(self):
+        engine = lv.EspeakEngine(dict(lv.DEFAULTS, voice="mb-fr4"))
+        self.assertEqual(engine.voice("en-US"), "mb-fr4")
 
-    def test_espeak_configured_voice_only_for_its_language(self):
-        engine = lv.EspeakEngine(dict(lv.DEFAULTS, espeak_voice="mb-fr1"))
-        self.assertEqual(engine.voice("fr-FR"), "mb-fr4")
-        self.assertEqual(engine.voice("en-US"), "en+f3")
+    def test_espeak_voice_list(self):
+        output = ("Pty Language       Age/Gender VoiceName          File      Other Languages\n"
+                  " 5  af              --/M      Afrikaans          gmw/af\n"
+                  " 2  fr-fr           --/M      French_(France)    roa/fr\n"
+                  " 5  fr              --/F      mb-fr4             mb/mb-fr4\n")
+        self.assertEqual(lv.parse_espeak_voices(output),
+                         [("af", "af", "Afrikaans"), ("fr-fr", "fr-fr", "French (France)"),
+                          ("mb-fr4", "fr", "mb-fr4")])
 
     def test_forced_language_beats_the_text(self):
         engine = lv.EspeakEngine(dict(lv.DEFAULTS, language="de"))
-        self.assertEqual(engine.voice("fr-FR"), "de+f3")
+        self.assertEqual(engine.voice("fr-FR"), "de")
 
     def test_spd_gets_a_normalized_language(self):
         engine = lv.SpdEngine(dict(lv.DEFAULTS, language="FR"))
         engine.voices = lambda: []
         command, _ = engine.speak_command("Bonjour")
         self.assertEqual(command[command.index("-l") + 1], "fr")
-        self.assertIn("female1", command)
+        self.assertNotIn("-y", command)
 
-    def test_spd_voice_list(self):
-        output = "   NAME   LANGUAGE  VARIANT\n   Mary Ann  en-US  none\n   Marie  fr  none\n"
-        self.assertEqual(lv.parse_spd_voices(output),
-                         [("Mary Ann", "en-US", None), ("Marie", "fr", None)])
+    def test_spd_voice_list_skips_variants(self):
+        output = ("   NAME   LANGUAGE  VARIANT\n   Mary Ann  en-US  none\n"
+                  "   Marie  fr  none\n   Marie+Adam  fr  Adam\n")
+        self.assertEqual(lv.parse_spd_voices(output), [("Mary Ann", "en-US"), ("Marie", "fr")])
 
     def test_spd_keeps_the_region_it_knows(self):
         engine = lv.SpdEngine(dict(lv.DEFAULTS))
-        engine.voices = lambda: [("a", "pt-BR", None), ("b", "fr", None)]
+        engine.voices = lambda: [("a", "pt-BR"), ("b", "fr")]
         self.assertEqual(engine._language_option("pt-BR"), "pt-BR")
         self.assertEqual(engine._language_option("fr-CA"), "fr")
 
     def test_spd_uses_the_code_its_voices_know(self):
         engine = lv.SpdEngine(dict(lv.DEFAULTS))
-        engine.voices = lambda: [("Mandarin", "cmn", None), ("Norwegian", "nb", None)]
+        engine.voices = lambda: [("Mandarin", "cmn"), ("Norwegian", "nb")]
         self.assertTrue(engine.supports("zh-CN"))
         self.assertEqual(engine._language_option("zh-CN"), "cmn")
         self.assertEqual(engine._language_option("no"), "nb")
 
-    def test_spd_voice_only_for_its_language(self):
-        engine = lv.SpdEngine(dict(lv.DEFAULTS, spd_voice="Marie"))
-        engine.voices = lambda: [("Marie", "fr", None), ("Mary", "en", None)]
-        french, _ = engine.speak_command("Bonjour", "fr-FR")
-        self.assertIn("-y", french)
-        english, _ = engine.speak_command("Hello", "en-US")
-        self.assertNotIn("-y", english)
-        self.assertIn("female1", english)
+    def test_spd_chosen_voice_reads_everything(self):
+        engine = lv.SpdEngine(dict(lv.DEFAULTS, voice="Mary"))
+        engine.voices = lambda: [("Marie", "fr"), ("Mary", "en")]
+        command, _ = engine.speak_command("Bonjour", "fr-FR")
+        self.assertEqual(command[command.index("-y") + 1], "Mary")
+        self.assertEqual(command[command.index("-l") + 1], "en")
+        self.assertEqual(engine.take_warning(), "")
 
     def test_spd_pitch(self):
         engine = lv.SpdEngine(dict(lv.DEFAULTS, pitch=-4))
@@ -220,65 +204,87 @@ class EngineTests(unittest.TestCase):
 
     def test_spd_reports_a_module_without_the_language(self):
         engine = lv.SpdEngine(dict(lv.DEFAULTS))
-        engine.voices = lambda: [("Mary", "en", None)]
+        engine.voices = lambda: [("Mary", "en")]
         engine.speak_command("Bonjour", "fr-FR")
         self.assertIn("fr-FR", engine.take_warning())
         engine.speak_command("Bonjour", "fr-FR")
         self.assertEqual(engine.take_warning(), "")
 
-    def test_mac_voice_follows_language_and_gender(self):
-        voices = [("Thomas", "fr_FR", "male"), ("Amélie", "fr_CA", "female"),
-                  ("Samantha", "en_US", "female")]
+    def test_mac_voice_follows_language_or_choice(self):
+        voices = [("Thomas", "fr_FR"), ("Samantha", "en_US")]
         with mock.patch.object(lv, "IS_MAC", True), \
                 mock.patch.object(lv, "mac_voices", return_value=voices):
             engine = lv.MacSayEngine(dict(lv.DEFAULTS), "fr-FR")
-        self.assertEqual(engine._pick("fr-FR"), "Amélie")
-        self.assertEqual(engine._pick("en-US"), "Samantha")
-        self.assertIsNone(engine._pick("de-DE"))
-        self.assertIn("de-DE", engine.take_warning())
-
-    def test_mac_genders_come_from_the_system(self):
-        output = "Kyoko|VoiceGenderFemale\nOtoya|VoiceGenderMale\nZarvox|VoiceGenderNeuter\n"
-        self.assertEqual(lv.parse_mac_genders(output),
-                         {"Kyoko": "female", "Otoya": "male", "Zarvox": None})
+            self.assertEqual(engine._pick("fr-FR"), "Thomas")
+            self.assertEqual(engine._pick("en-US"), "Samantha")
+            self.assertIsNone(engine._pick("de-DE"))
+            self.assertIn("de-DE", engine.take_warning())
+            chosen = lv.MacSayEngine(dict(lv.DEFAULTS, voice="Samantha"), "fr-FR")
+            self.assertEqual(chosen._pick("fr-FR"), "Samantha")
 
     def test_sapi_voice_list_merges_both_apis(self):
-        output = ("\ufeffMicrosoft Paul|fr-FR|Male|winrt\r\n"
-                  "Microsoft Hortense|fr-FR|Female|winrt\r\n"
-                  "Microsoft Hortense Desktop|fr-FR|Female|sapi\r\n"
-                  "Vendor Voice|de-DE|Neutral|sapi\r\nbad line\r\n")
+        output = ("\ufeffMicrosoft Paul|fr-FR|winrt\r\n"
+                  "Microsoft Hortense|fr-FR|winrt\r\n"
+                  "Microsoft Hortense Desktop|fr-FR|sapi\r\n"
+                  "Vendor Voice|de-DE|sapi\r\nbad line\r\n")
         self.assertEqual(lv.parse_sapi_voices(output),
-                         [("Microsoft Paul", "fr-FR", "male", "winrt"),
-                          ("Microsoft Hortense", "fr-FR", "female", "winrt"),
-                          ("Vendor Voice", "de-DE", None, "sapi")])
+                         [("Microsoft Paul", "fr-FR", "winrt"),
+                          ("Microsoft Hortense", "fr-FR", "winrt"),
+                          ("Vendor Voice", "de-DE", "sapi")])
+
+    def sapi(self, voices, language="fr-FR", **cfg):
+        patches = (mock.patch.object(lv, "IS_WIN", True),
+                   mock.patch.object(lv, "sapi_voices", return_value=voices))
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+        return lv.SapiEngine(dict(lv.DEFAULTS, **cfg), language)
 
     def test_modern_windows_voice_gets_speed_and_pitch(self):
-        voices = [("Microsoft Paul", "fr-FR", "male", "winrt")]
-        with mock.patch.object(lv, "IS_WIN", True), \
-                mock.patch.object(lv, "sapi_voices", return_value=voices):
-            engine = lv.SapiEngine(dict(lv.DEFAULTS, gender="male", speed=150, pitch=4), "fr-FR")
-            script = engine._script("t.txt", None, "fr-FR")
+        engine = self.sapi([("Microsoft Paul", "fr-FR", "winrt")], speed=150, pitch=4)
+        script = engine._script("t.txt", None, "fr-FR")
         self.assertIn("-eq 'Microsoft Paul'", script)
         self.assertIn("SpeakingRate = 1.50", script)
         self.assertIn("AudioPitch = 1.20", script)
 
-    def test_name_saved_by_version_1_2_still_works(self):
-        voices = [("Microsoft Julie", "fr-FR", "female", "winrt"),
-                  ("Microsoft Hortense", "fr-FR", "female", "winrt")]
-        with mock.patch.object(lv, "IS_WIN", True), \
-                mock.patch.object(lv, "sapi_voices", return_value=voices):
-            engine = lv.SapiEngine(
-                dict(lv.DEFAULTS, sapi_voice="Microsoft Hortense Desktop"), "fr-FR")
-            self.assertEqual(engine._voice("fr-FR"), "Microsoft Hortense")
+    def test_windows_scripts_cannot_wait_forever(self):
+        engine = self.sapi([("Microsoft Paul", "fr-FR", "winrt")])
+        script = engine._script("t.txt", None, "fr-FR")
+        self.assertIn("Wait(60000)", script)
+        self.assertNotIn("Wait(-1)", script)
+        self.assertTrue(script.endswith("[Environment]::Exit(0)"))
 
     def test_sapi_script_never_hardcodes_the_ssml_language(self):
-        with mock.patch.object(lv, "IS_WIN", True), \
-                mock.patch.object(lv, "sapi_voices", return_value=WINDOWS_VOICES):
-            engine = lv.SapiEngine(dict(lv.DEFAULTS, gender="male"), "en-US")
-            script = engine._script("t.txt", None, "en-US")
+        engine = self.sapi(WINDOWS_VOICES, "en-US")
+        script = engine._script("t.txt", None, "en-US")
         self.assertIn("$s.SelectVoice('David')", script)
         self.assertIn("$s.Voice.Culture.Name", script)
         self.assertNotIn("catch", script)
+
+    def test_windows_chosen_voice_reads_everything(self):
+        engine = self.sapi(WINDOWS_VOICES, voice="Zira")
+        self.assertEqual(engine._voice("fr-FR"), "Zira")
+        self.assertEqual(engine._voice("de-DE"), "Zira")
+        self.assertEqual(engine.take_warning(), "")
+
+    def test_unknown_chosen_voice_falls_back_to_automatic(self):
+        engine = self.sapi(WINDOWS_VOICES, voice="Removed Voice")
+        self.assertEqual(engine._voice("fr-FR"), "Hortense")
+
+    def test_test_button_plays_the_chosen_voice_in_its_language(self):
+        self.sapi(WINDOWS_VOICES)
+        cfg = dict(lv.DEFAULTS, voice="Zira", engine="sapi")
+        with mock.patch.object(lv, "ENGINE_KEYS", ["auto", "sapi"]):
+            engine, language, sample = lv.voice_sample(cfg)
+        self.assertEqual(language, "en-US")
+        self.assertTrue(sample.startswith("Hello"))
+
+    def test_voice_list_is_sorted_and_keeps_automatic_out(self):
+        self.sapi(WINDOWS_VOICES)
+        cfg = dict(lv.DEFAULTS, engine="sapi", voice="Zira")
+        with mock.patch.object(lv, "ENGINE_KEYS", ["auto", "sapi"]):
+            engine, voices = lv.voice_choices(cfg)
+        self.assertEqual([voice[0] for voice in voices], ["David", "Hortense", "Zira"])
 
 
 class ResolveTests(unittest.TestCase):
@@ -334,7 +340,7 @@ class SpdCacheTests(unittest.TestCase):
         lv._SPD_VOICES.clear()
         output = types.SimpleNamespace(stdout=b"NAME LANGUAGE VARIANT\nMarie fr none\n")
         with mock.patch.object(lv.subprocess, "run", return_value=output) as run:
-            self.assertEqual(lv.spd_voices("spd-say"), [("Marie", "fr", None)])
+            self.assertEqual(lv.spd_voices("spd-say"), [("Marie", "fr")])
             lv.spd_voices("spd-say")
             self.assertEqual(run.call_count, 1)
             lv.spd_voices("spd-say", "espeak-ng")
@@ -353,19 +359,30 @@ class ConfigTests(unittest.TestCase):
         self.addCleanup(os.remove, lv.CONFIG_FILE)
 
     def test_defaults_saved_by_old_versions_become_auto(self):
-        self.write({"language": "fr", "espeak_voice": "fr", "gender": "male"})
+        self.write({"language": "fr", "espeak_voice": "fr"})
         cfg = lv.load_config()
-        self.assertEqual((cfg["language"], cfg["espeak_voice"], cfg["gender"]),
-                         ("auto", "", "male"))
+        self.assertEqual((cfg["language"], cfg["voice"]), ("auto", ""))
 
-    def test_old_explicit_choice_is_kept(self):
-        self.write({"language": "en", "espeak_voice": "mb-fr4"})
-        cfg = lv.load_config()
-        self.assertEqual((cfg["language"], cfg["espeak_voice"]), ("en", "mb-fr4"))
+    def test_old_explicit_language_is_kept(self):
+        self.write({"language": "en"})
+        self.assertEqual(lv.load_config()["language"], "en")
 
     def test_current_choice_of_french_is_kept(self):
         self.write({"language": "fr", "config_version": lv.CONFIG_VERSION})
         self.assertEqual(lv.load_config()["language"], "fr")
+
+    def test_old_voice_fields_move_to_the_voice_list(self):
+        self.write({"sapi_voice": "Microsoft Hortense Desktop", "config_version": 2})
+        self.assertEqual(lv.load_config()["voice"], "Microsoft Hortense")
+
+    def test_old_mbrola_and_piper_settings_are_kept(self):
+        self.write({"espeak_voice": "mb-fr4", "piper_model_male": "tom.onnx", "config_version": 2})
+        cfg = lv.load_config()
+        self.assertEqual((cfg["voice"], cfg["piper_model"]), ("mb-fr4", "tom.onnx"))
+
+    def test_gender_is_gone_from_the_settings(self):
+        self.write({"gender": "male", "config_version": 2})
+        self.assertNotIn("gender", lv.load_config())
 
 
 class AboutTests(unittest.TestCase):
@@ -467,15 +484,6 @@ class InterfaceLanguageTests(unittest.TestCase):
             lv.msgbox(None, "x", "errorbox")
         self.assertIn("Wenn das Problem", log.call_args[0][1])
 
-    def test_gender_warning_is_a_whole_sentence(self):
-        lv._UI.update(language="en", strings=lv.load_ui_strings("en"))
-        with mock.patch.object(lv, "_which", side_effect=lambda *names: names[0]):
-            engine = lv.EspeakEngine(dict(lv.DEFAULTS, gender="male"))
-        engine.note_missing_gender("fr")
-        self.assertEqual(engine.take_warning(),
-                         'eSpeak NG has no male voice for the language "fr": '
-                         "a female voice is used.")
-
 
 class ConfigConcurrencyTests(unittest.TestCase):
     def test_no_change_is_lost_while_others_read(self):
@@ -559,44 +567,39 @@ class ScriptTests(unittest.TestCase):
 class SapiAudioTests(unittest.TestCase):
     """Renders real audio: the voice picked must be the voice heard."""
 
-    def render(self, voices, language, gender, pitch=0):
+    def render(self, voices, language, voice="", pitch=0):
         with mock.patch.object(lv, "sapi_voices", return_value=voices):
-            engine = lv.SapiEngine(dict(lv.DEFAULTS, gender=gender, pitch=pitch), language)
+            engine = lv.SapiEngine(dict(lv.DEFAULTS, voice=voice, pitch=pitch), language)
             with tempfile.TemporaryDirectory() as directory:
                 path = os.path.join(directory, "out.wav")
                 engine.synth("Bonjour tout le monde", path, language)
                 return Path(path).read_bytes()
 
-    def test_selected_voice_is_heard(self):
+    def test_every_installed_voice_has_its_own_sound(self):
+        """Each voice of the list, chosen in turn, must change what is heard."""
         installed = lv.sapi_voices()
-        english = [voice for voice in installed if voice[1] == "en-US"]
-        french = [voice for voice in installed if voice[1] == "fr-FR"]
-        if not english or not french:
-            self.skipTest("needs a French and an English voice")
-        self.assertNotEqual(self.render(installed, "en-US", "male"),
-                            self.render(installed, "fr-FR", "male"))
-        men = [voice for voice in english if voice[2] == "male"]
-        women = [voice for voice in english if voice[2] == "female"]
-        if men and women:
-            self.assertNotEqual(self.render(installed, "en-US", "male"),
-                                self.render(installed, "en-US", "female"))
+        heard = [self.render(installed, "fr-FR", voice[0]) for voice in installed]
+        self.assertGreater(len(installed), 0)
+        self.assertEqual(len(set(heard)), len(installed))
 
-
-    def test_french_man_and_woman_are_different_voices(self):
-        installed = lv.sapi_voices()
-        french = {voice[2] for voice in installed if voice[1] == "fr-FR"}
-        if not {"female", "male"} <= french:
-            self.skipTest("needs a French man and a French woman")
-        self.assertNotEqual(self.render(installed, "fr-FR", "male"),
-                            self.render(installed, "fr-FR", "female"))
+    def test_voices_seen_only_by_the_older_api_work(self):
+        command = ("Add-Type -AssemblyName System.Speech; "
+                   "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                   "foreach ($v in $s.GetInstalledVoices()) { "
+                   "$v.VoiceInfo.Name + '|' + $v.VoiceInfo.Culture.Name }")
+        out = subprocess.run([lv.powershell(), "-NoProfile", "-Command", command],
+                             capture_output=True, timeout=60).stdout.decode("utf-8", "replace")
+        voices = [tuple(line.strip().split("|")) + ("sapi",) for line in out.splitlines() if "|" in line]
+        heard = {self.render(voices, voice[1], voice[0]) for voice in voices}
+        self.assertEqual(len(heard), len(voices))
 
     def test_pitch_changes_the_audio_of_every_kind_of_voice(self):
         for source in ("winrt", "sapi"):
-            voices = [voice for voice in lv.sapi_voices() if voice[3] == source]
+            voices = [voice for voice in lv.sapi_voices() if voice[2] == source]
             if voices:
-                language, gender = voices[0][1], voices[0][2]
-                self.assertNotEqual(self.render(voices, language, gender, 0),
-                                    self.render(voices, language, gender, 6), source)
+                language = voices[0][1]
+                self.assertNotEqual(self.render(voices, language, voices[0][0], 0),
+                                    self.render(voices, language, voices[0][0], 6), source)
 
     def test_audio_can_be_assembled_for_export(self):
         voices = lv.sapi_voices()
@@ -604,27 +607,21 @@ class SapiAudioTests(unittest.TestCase):
             paths = []
             for name in ("a.wav", "b.wav"):
                 paths.append(os.path.join(directory, name))
-                Path(paths[-1]).write_bytes(self.render(voices, voices[0][1], voices[0][2]))
+                Path(paths[-1]).write_bytes(self.render(voices, voices[0][1]))
             out = os.path.join(directory, "out.wav")
             lv.concat_wavs(paths, out)
             self.assertGreater(lv._wav_seconds(out), 1)
 
-
-    def test_playback_scripts_run_to_the_end(self):
-        """Runs the very command used for reading, for each kind of voice."""
-        for source in ("winrt", "sapi"):
-            voices = [voice for voice in lv.sapi_voices() if voice[3] == source]
-            if not voices:
-                continue
-            with mock.patch.object(lv, "sapi_voices", return_value=voices[:1]):
-                engine = lv.SapiEngine(dict(lv.DEFAULTS, gender=voices[0][2] or "female"),
-                                       voices[0][1])
-                command, _ = engine.speak_command("Oui", voices[0][1])
+    def test_every_voice_plays_to_the_end(self):
+        """Runs the very command used for reading, for every installed voice."""
+        for voice in lv.sapi_voices():
+            engine = lv.SapiEngine(dict(lv.DEFAULTS, voice=voice[0]), voice[1])
+            command, _ = engine.speak_command("Oui", voice[1])
             result = subprocess.run(command, capture_output=True, timeout=60)
-            self.assertEqual((source, result.returncode, result.stderr), (source, 0, b""))
+            self.assertEqual((voice[0], result.returncode, result.stderr), (voice[0], 0, b""))
 
     def test_a_failing_script_is_not_silent(self):
-        voices = [("No Such Voice", "fr-FR", "female", "sapi")]
+        voices = [("No Such Voice", "fr-FR", "sapi")]
         with mock.patch.object(lv, "sapi_voices", return_value=voices):
             engine = lv.SapiEngine(dict(lv.DEFAULTS), "fr-FR")
             command, _ = engine.speak_command("Oui", "fr-FR")

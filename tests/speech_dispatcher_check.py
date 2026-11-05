@@ -108,7 +108,7 @@ def speak(name, text, language, **settings):
 def main():
     voices = lv.spd_voices(lv._which("spd-say"))
     languages = {lv.primary_language(voice[1]) for voice in voices}
-    check("voices are listed", len(voices) > 20, "%d voices" % len(voices))
+    check("voices are listed", 20 < len(voices) < 1000, "%d voices" % len(voices))
     for language in ("fr", "en-US", "en-GB", "ar", "ru", "zh-CN", "zh-TW", "ja", "ko", "hi",
                      "de", "es", "pt-BR", "it", "nl", "pl", "tr", "vi", "sv", "nb", "he", "th",
                      "id", "sw", "el", "uk"):
@@ -117,16 +117,16 @@ def main():
     print("languages:", len(languages), flush=True)
 
     french = "Bonjour tout le monde, ceci est un essai de la voix."
-    woman = speak("woman", french, "fr-FR", gender="female")
-    man = speak("man", french, "fr-FR", gender="male")
-    check("speech is heard", len(woman) > 8000 and len(man) > 8000,
-          "%d %d samples" % (len(woman), len(man)))
-    woman_hz, man_hz = pitch_hz(woman), pitch_hz(man)
-    check("female voice is higher than male voice", woman_hz > man_hz * 1.15,
-          "%.0f Hz / %.0f Hz" % (woman_hz, man_hz))
+    names = {lv.primary_language(voice[1]): voice[0] for voice in voices}
+    default = speak("default", french, "fr-FR")
+    chosen = speak("chosen", french, "fr-FR", voice=names["de"])
+    check("speech is heard", len(default) > 8000 and len(chosen) > 8000,
+          "%d %d samples" % (len(default), len(chosen)))
+    check("a chosen voice changes the sound", default != chosen,
+          "%d / %d samples" % (len(default), len(chosen)))
 
-    low = speak("low", french, "fr-FR", gender="male", pitch=-8)
-    high = speak("high", french, "fr-FR", gender="male", pitch=8)
+    low = speak("low", french, "fr-FR", pitch=-8)
+    high = speak("high", french, "fr-FR", pitch=8)
     low_hz, high_hz = pitch_hz(low), pitch_hz(high)
     check("pitch setting changes the voice", high_hz > low_hz * 1.15,
           "%.0f Hz / %.0f Hz" % (low_hz, high_hz))
