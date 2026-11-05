@@ -124,6 +124,7 @@ This guide explains how to help, how the code is organised, and how to get a cha
   <tr><td><code>extension/META-INF/manifest.xml</code></td><td>List of the components LibreOffice must load</td></tr>
   <tr><td><code>build.py</code></td><td>Checks the sources and builds the <code>.oxt</code></td></tr>
   <tr><td><code>tests/</code></td><td>Automated tests and checks in a real LibreOffice</td></tr>
+  <tr><td><code>.github/workflows/</code></td><td>Tests run by GitHub</td></tr>
   <tr><td><code>docs/</code></td><td>This guide and its source. The PDF is also included in the <code>.oxt</code>, and opens from the About window</td></tr>
 </table>
 <p>The extension has <strong>no third-party Python dependency</strong>. LibreOffice ships its own Python
@@ -216,7 +217,11 @@ python build.py</code></pre>
 <pre><code>docker build -t lvlo-linux-test tests/linux
 docker run --rm -v "$PWD:/repo:ro" lvlo-linux-test bash /repo/tests/linux/run.sh</code></pre>
 <p>To run <code>libreoffice_check.py</code> elsewhere, follow the instructions at the top of the file. Use
-LibreOffice's own Python on Windows and macOS.</p>
+LibreOffice's own Python on Windows and macOS. On a Mac, <code>python3 tests/macos_check.py</code> checks the
+real voices.</p>
+<p>GitHub runs the automated tests on Windows, Linux and macOS, the Linux check and the macOS check, for every
+push and pull request. The result appears on your pull request, and each run offers the <code>.oxt</code> to
+download.</p>
 <p class="note"><strong>Tip.</strong> These tests found bugs that the automated tests could not see, such as
 shortcuts that were never registered. Run them before any change to menus, shortcuts or dialogs.</p>
 
@@ -338,6 +343,7 @@ modification.</p>
   <tr><td><code>extension/META-INF/manifest.xml</code></td><td>Liste des composants que LibreOffice doit charger</td></tr>
   <tr><td><code>build.py</code></td><td>Vérifie les sources et construit le <code>.oxt</code></td></tr>
   <tr><td><code>tests/</code></td><td>Tests automatiques et vérifications dans un vrai LibreOffice</td></tr>
+  <tr><td><code>.github/workflows/</code></td><td>Tests lancés par GitHub</td></tr>
   <tr><td><code>docs/</code></td><td>Ce guide et sa source. Le PDF est aussi inclus dans le <code>.oxt</code>, et s'ouvre depuis la fenêtre À propos</td></tr>
 </table>
 <p>L'extension n'a <strong>aucune dépendance Python externe</strong>. LibreOffice embarque son propre Python,
@@ -432,7 +438,11 @@ environ 1 Go :</p>
 <pre><code>docker build -t lvlo-linux-test tests/linux
 docker run --rm -v "$PWD:/repo:ro" lvlo-linux-test bash /repo/tests/linux/run.sh</code></pre>
 <p>Pour lancer <code>libreoffice_check.py</code> ailleurs, suivez les instructions en tête du fichier. Sous
-Windows et macOS, utilisez le Python de LibreOffice.</p>
+Windows et macOS, utilisez le Python de LibreOffice. Sur un Mac, <code>python3 tests/macos_check.py</code> vérifie
+les vraies voix.</p>
+<p>GitHub lance les tests automatiques sous Windows, Linux et macOS, la vérification Linux et la vérification
+macOS, à chaque envoi et à chaque <em>pull request</em>. Le résultat s'affiche sur votre <em>pull request</em>, et
+chaque exécution propose le <code>.oxt</code> en téléchargement.</p>
 <p class="note"><strong>Conseil.</strong> Ces tests ont trouvé des bugs invisibles pour les tests automatiques,
 comme des raccourcis jamais enregistrés. Lancez-les avant toute modification des menus, des raccourcis ou des
 fenêtres.</p>

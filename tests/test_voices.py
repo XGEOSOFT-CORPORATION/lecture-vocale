@@ -591,7 +591,8 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(self.language("La lettre grecque α dans une phrase"), "fr-FR")
 
 
-@unittest.skipUnless(sys.platform == "win32", "needs Windows")
+@unittest.skipUnless(sys.platform == "win32" and not os.environ.get("CI"),
+                     "needs Windows voices and a sound card")
 class SapiAudioTests(unittest.TestCase):
     """Renders real audio: the voice picked must be the voice heard."""
 

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Runs inside the container, as a normal user, on a copy of the read-only /repo.
+# The exit code is not zero if any step fails.
 export XDG_RUNTIME_DIR=/tmp/run LANG=C.UTF-8
+status=0
 mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
 pulseaudio --start --exit-idle-time=-1 --log-target=stderr 2>/dev/null
 sleep 1
@@ -9,9 +11,11 @@ pactl set-default-sink virtual
 cp -r /repo /tmp/work && cd /tmp/work || exit 1
 
 echo "=== versions"; soffice --version; python3 --version; spd-say --version | head -1
-echo "=== unit tests"; PYTHONWARNINGS=ignore python3 -m unittest discover -s tests 2>&1 | tail -4
-echo "=== build"; python3 build.py
-echo "=== speech dispatcher"; python3 tests/speech_dispatcher_check.py virtual.monitor
+echo "=== unit tests"
+PYTHONWARNINGS=ignore python3 -m unittest discover -s tests 2>&1 | tail -4
+[ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+echo "=== build"; python3 build.py || status=1
+echo "=== speech dispatcher"; python3 tests/speech_dispatcher_check.py virtual.monitor || status=1
 
 echo "=== libreoffice"
 export LECTURE_VOCALE_HEADLESS=1 LECTURE_VOCALE_EXPORT_PATH=/tmp/export.wav LV_EXPECT_ENGINE=spd LV_VOICE_STEP=20 LV_EXPECT_AUTO_MESSAGE="Nothing to read"
@@ -21,5 +25,8 @@ unopkg list "-env:UserInstallation=$PROFILE" 2>&1 | grep -iE 'Identifier|Version
 soffice "-env:UserInstallation=$PROFILE" --headless --norestore --nologo \
     "--accept=socket,host=localhost,port=2002;urp;" >/tmp/soffice.log 2>&1 &
 python3 tests/libreoffice_check.py "$HOME/.config/lecture-vocale-libreoffice/lecture-vocale.log"
-echo "exit $?"
+check=$?
+echo "exit $check"
+[ "$check" -eq 0 ] || status=1
 echo "=== extension log"; tail -25 "$HOME/.config/lecture-vocale-libreoffice/lecture-vocale.log"
+exit "$status"

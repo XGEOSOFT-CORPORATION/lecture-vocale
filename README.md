@@ -1,5 +1,7 @@
 # Lecture vocale – Read Aloud for LibreOffice
 
+[![Tests](https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/actions/workflows/tests.yml/badge.svg)](https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/actions/workflows/tests.yml)
+
 [English](#english) · [Français](#français)
 
 Offline text-to-speech extension for LibreOffice 24.2 and all later versions, on Windows, Linux
@@ -149,6 +151,9 @@ The extension is written to `dist/LectureVocale-<version>.oxt`. The script stops
 on Python syntax that LibreOffice 24.2's Python 3.8 cannot read, and on files missing from the
 manifest.
 
+GitHub runs the tests on Windows, Linux and macOS for every push and pull request. Each run also
+builds the `.oxt`, which you can download from the run's page.
+
 Run the tests (the audio test runs on Windows only):
 
 ```bash
@@ -165,6 +170,7 @@ python -m unittest discover -s tests
 | `extension/description.xml` | Identifier, version, minimum LibreOffice version |
 | `build.py` | Builds the `.oxt` |
 | `tests/` | Automated tests and checks in a real LibreOffice |
+| `.github/workflows/` | Tests run by GitHub |
 | `docs/` | Contributor Guide (PDF) and its source |
 
 ### Troubleshooting
@@ -365,6 +371,9 @@ L'extension est écrite dans `dist/LectureVocale-<version>.oxt`. Le script s'arr
 formé, sur une syntaxe que le Python 3.8 de LibreOffice 24.2 ne sait pas lire, et sur un fichier
 absent du manifeste.
 
+GitHub lance les tests sous Windows, Linux et macOS à chaque envoi et à chaque *pull request*. Chaque
+exécution construit aussi le `.oxt`, téléchargeable depuis sa page.
+
 Lancer les tests (le test audio ne tourne que sous Windows) :
 
 ```bash
@@ -381,6 +390,7 @@ python -m unittest discover -s tests
 | `extension/description.xml` | Identifiant, version, version minimale de LibreOffice |
 | `build.py` | Construit le `.oxt` |
 | `tests/` | Tests automatiques et vérifications dans un vrai LibreOffice |
+| `.github/workflows/` | Tests lancés par GitHub |
 | `docs/` | Guide du contributeur (PDF) et sa source |
 
 ### Dépannage
