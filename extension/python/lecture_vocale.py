@@ -32,6 +32,8 @@ IMPL_NAME = "com.adanalytics.LectureVocale"
 SERVICE_NAMES = ("com.adanalytics.LectureVocale",)
 VERSION = "1.3.0"
 TITLE = "Lecture vocale"
+GITHUB_URL = "https://github.com/XGEOSOFT-CORPORATION/lecture-vocale"
+ISSUES_URL = GITHUB_URL + "/issues"
 
 IS_WIN = sys.platform.startswith("win")
 IS_MAC = sys.platform == "darwin"
@@ -41,8 +43,6 @@ HEADLESS = bool(os.environ.get("LECTURE_VOCALE_HEADLESS"))
 
 SAMPLE_TEXT = ("Bonjour ! Ceci est un test de la lecture vocale dans LibreOffice. "
                "Le débit, la tonalité et la voix se règlent pendant la lecture.")
-SAMPLE_TEXT_EN = ("Hello! This is a test of Read Aloud in LibreOffice. "
-                  "Speed, pitch and voice can be changed while reading.")
 
 _ENGINE_LABELS = {"auto": "Automatique (voix du système d'abord)",
                   "piper": "Piper — voix neuronale hors ligne",
@@ -60,6 +60,19 @@ SPEED_MIN, SPEED_MAX, SPEED_STEP = 50, 250, 10
 PITCH_MIN, PITCH_MAX = -10, 10
 _COUNTER = itertools.count()
 CONFIG_VERSION = 2
+
+# Langues de l'interface : (code, nom dans sa propre langue). Le français est la langue
+# source ; les autres viennent de python/i18n/<code>.json, qui associe le texte français
+# à sa traduction. Pour ajouter une langue : ajouter son fichier et une ligne ici, et
+# ses titres dans Addons.xcu.
+UI_LANGUAGES = (("fr", "Français"), ("en", "English"), ("es", "Español"), ("de", "Deutsch"),
+                ("it", "Italiano"), ("pt", "Português"))
+_UI = {"language": "fr", "strings": {}}
+
+
+def _(text):
+    """Traduction d'un texte de l'interface."""
+    return _UI["strings"].get(text, text)
 
 
 # --------------------------------------------------------------------------
@@ -92,6 +105,7 @@ DEFAULTS = {
     "pitch": 0,                 # -10 (grave) … +10 (aigu)
     "gender": "female",         # female | male
     "language": "auto",         # auto = langue du texte, sinon code forcé (fr, en…)
+    "ui_language": "auto",      # auto = langue de LibreOffice, sinon un code de UI_LANGUAGES
     "spd_module": "",
     "spd_voice": "",
     "espeak_voice": "",
@@ -102,7 +116,7 @@ DEFAULTS = {
     "config_version": CONFIG_VERSION,
 }
 
-_CFG_LOCK = threading.Lock()
+_CFG_LOCK = threading.RLock()
 
 
 def log(*parts):
@@ -126,8 +140,9 @@ def _clamp(v, lo, hi, default):
 def load_config():
     cfg = dict(DEFAULTS)
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
+        with _CFG_LOCK:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
         cfg.update({k: v for k, v in data.items() if k in DEFAULTS})
         if data.get("config_version", 1) < 2:
             # Jusqu'à la 1.2, « fr » était une valeur par défaut enregistrée, pas un choix.
@@ -151,16 +166,24 @@ def save_config(cfg):
             tmp = CONFIG_FILE + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(cfg, fh, indent=2, ensure_ascii=False)
-            os.replace(tmp, CONFIG_FILE)
+            for attempt in range(20):
+                try:
+                    os.replace(tmp, CONFIG_FILE)
+                    break
+                except PermissionError:     # Windows : antivirus ou indexation sur le fichier
+                    if attempt == 19:
+                        raise
+                    time.sleep(0.05)
         except Exception as exc:
             log("save_config:", exc)
 
 
 def update_config(**changes):
-    cfg = load_config()
-    cfg.update(changes)
-    save_config(cfg)
-    return load_config()
+    with _CFG_LOCK:
+        cfg = load_config()
+        cfg.update(changes)
+        save_config(cfg)
+        return load_config()
 
 
 # --------------------------------------------------------------------------
@@ -203,6 +226,15 @@ def primary_language(tag):
     return re.split(r"[-_]", (tag or "").strip().lower())[0]
 
 
+# Une même langue a parfois deux codes : LibreOffice dit zh ou nb, les voix cmn ou no.
+_LANGUAGE_FAMILIES = ({"zh", "cmn"}, {"nb", "no"}, {"he", "iw"}, {"id", "in"}, {"yi", "ji"})
+
+
+def same_language(first, second):
+    first, second = primary_language(first), primary_language(second)
+    return first == second or any({first, second} <= family for family in _LANGUAGE_FAMILIES)
+
+
 def pick_voice(voices, language, gender, preferred=None):
     """Choisit une voix parmi des triplets (voix, locale, genre ou None).
 
@@ -211,9 +243,8 @@ def pick_voice(voices, language, gender, preferred=None):
     puis la région exacte (fr-CA avant fr-FR). Renvoie (voix, genre respecté) ;
     voix vaut None si personne ne parle cette langue.
     """
-    wanted = primary_language(language)
     exact = (language or "").replace("_", "-").lower()
-    same = [v for v in voices if primary_language(v[1]) == wanted]
+    same = [v for v in voices if same_language(v[1], language)]
     same.sort(key=lambda v: v[1].replace("_", "-").lower() != exact)
     for voice in same:
         if voice[0] == preferred and voice[2] in (gender, None):
@@ -404,10 +435,10 @@ def find_models(cfg=None, refresh=False):
     return models
 
 
-_FEMALE_TOKENS = {"siwis", "jessica", "female", "femme", "woman", "women", "girl", "fille",
+_FEMALE_TOKENS = {"siwis", "jessica", "female", _("femme"), "woman", "women", "girl", "fille",
                   "amy", "kathleen", "kristin", "lessac", "ljspeech", "jenny", "alba", "cori",
                   "kerstin", "eva", "ramona", "paola"}
-_MALE_TOKENS = {"tom", "gilles", "pierre", "male", "homme", "man", "men", "bernard", "boy",
+_MALE_TOKENS = {"tom", "gilles", "pierre", "male", _("homme"), "man", "men", "bernard", "boy",
                 "ryan", "alan", "joe", "john", "danny", "kusal", "norman", "thorsten",
                 "karlsson", "pavoque", "davefx", "carlfm", "riccardo", "faber", "edresson"}
 
@@ -505,8 +536,8 @@ def find_player():
 def play_command(wav_path):
     player = find_player()
     if player is None:
-        raise EngineError("Aucun lecteur audio trouvé (pw-play, paplay, aplay ou ffplay).\n"
-                          "Installez par exemple : sudo apt install pulseaudio-utils")
+        raise EngineError(_("Aucun lecteur audio trouvé (pw-play, paplay, aplay ou ffplay).\n"
+                          "Installez par exemple : sudo apt install pulseaudio-utils"))
     if IS_WIN:
         safe = wav_path.replace("'", "''")
         return player + ["-NoProfile", "-NonInteractive", "-Command",
@@ -520,15 +551,15 @@ def detection_summary(cfg):
     piper = find_piper(cfg)
     models = find_models(cfg) if piper else []
     player = find_player()
-    parts = ["Piper " + mark(piper and models) + (" (%d voix)" % len(models) if piper else "")]
+    parts = ["Piper " + mark(piper and models) + (_(" (%d voix)") % len(models) if piper else "")]
     if not IS_WIN and not IS_MAC:
         parts.append("spd-say " + mark(_which("spd-say")))
     parts.append("eSpeak " + mark(_which("espeak-ng", "espeak")))
     if IS_WIN:
-        parts.append("voix Windows ✓ (%d)" % len(sapi_voices()))
+        parts.append(_("voix Windows ✓ (%d)") % len(sapi_voices()))
     if IS_MAC:
-        parts.append("voix macOS %s (%d)" % (mark(_which("say")), len(mac_voices())))
-    parts.append("lecteur : " + (os.path.basename(player[0]) if player else "aucun"))
+        parts.append(_("voix macOS %s (%d)") % (mark(_which("say")), len(mac_voices())))
+    parts.append(_("lecteur : ") + (os.path.basename(player[0]) if player else _("aucun")))
     parts.append("ffmpeg " + mark(_which("ffmpeg")))
     return "   ".join(parts)
 
@@ -571,16 +602,17 @@ class Engine(object):
 
     def note_missing_language(self, language):
         self._warn_once(("language", primary_language(language)),
-                        "%s n'a pas de voix pour la langue « %s » : la voix par défaut "
+                        _("%s n'a pas de voix pour la langue « %s » : la voix par défaut "
                         "lit le texte avec son propre accent.\nInstallez une voix pour "
-                        "cette langue, puis relancez LibreOffice." % (self.label, language))
+                        "cette langue, puis relancez LibreOffice.") % (self.label, language))
 
     def note_missing_gender(self, language):
+        message = (_("%s n'a pas de voix d'homme pour la langue « %s » : une voix de femme "
+                   "est utilisée.") if self.gender == "male" else
+                   _("%s n'a pas de voix de femme pour la langue « %s » : une voix d'homme "
+                   "est utilisée."))
         self._warn_once(("gender", primary_language(language), self.gender),
-                        "%s n'a pas de voix %s pour la langue « %s » : une voix de "
-                        "l'autre genre est utilisée."
-                        % (self.label, "d'homme" if self.gender == "male" else "de femme",
-                           language))
+                        message % (self.label, language))
 
     def take_warning(self):
         warning, self.warning = self.warning, ""
@@ -603,7 +635,7 @@ class Engine(object):
         raise NotImplementedError
 
     def synth(self, text, wav_path, language=None):
-        raise EngineError("Ce moteur ne sait pas écrire de fichier audio.")
+        raise EngineError(_("Ce moteur ne sait pas écrire de fichier audio."))
 
     def stop_all(self):
         pass
@@ -617,14 +649,14 @@ class PiperEngine(Engine):
     def __init__(self, cfg, language=None):
         self.bin = find_piper(cfg)
         if not self.bin:
-            raise EngineError("Exécutable Piper introuvable. Indiquez son chemin dans "
-                              "Lecture vocale ▸ Paramètres.")
+            raise EngineError(_("Exécutable Piper introuvable. Indiquez son chemin dans "
+                              "Lecture vocale ▸ Paramètres."))
         self.models = find_models(cfg)
         self.ffmpeg = _which("ffmpeg")
         Engine.__init__(self, cfg, language)
         if not self.model:
-            raise EngineError("Aucune voix Piper (.onnx + .onnx.json) trouvée. "
-                              "Indiquez le fichier de voix dans les paramètres.")
+            raise EngineError(_("Aucune voix Piper (.onnx + .onnx.json) trouvée. "
+                              "Indiquez le fichier de voix dans les paramètres."))
         self.flag = piper_length_flag(self.bin)
 
     def update(self, cfg):
@@ -642,8 +674,8 @@ class PiperEngine(Engine):
         return [voice for path in seen for voice in model_voices(path, cfg)]
 
     def supports(self, language=None):
-        wanted = primary_language(self.language_for(language))
-        return any(primary_language(voice[1]) == wanted for voice in self._voices())
+        wanted = self.language_for(language)
+        return any(same_language(voice[1], wanted) for voice in self._voices())
 
     def _pick(self, language):
         """Renvoie (modèle, locuteur, genre non respecté)."""
@@ -659,13 +691,14 @@ class PiperEngine(Engine):
 
     def describe(self):
         name = os.path.splitext(os.path.basename(self.model))[0]
-        txt = "Piper · voix : " + name
+        txt = _("Piper · voix : ") + name
         if self.gender_fallback:
-            txt += ("\n⚠ Pas de voix Piper « %s » : installez par ex. %s"
-                    % ("homme" if self.gender == "male" else "femme",
-                       "fr_FR-tom-medium" if self.gender == "male" else "fr_FR-siwis-medium"))
+            if self.gender == "male":
+                txt += _("\n⚠ Pas de voix Piper d'homme : installez par ex. %s") % "fr_FR-tom-medium"
+            else:
+                txt += _("\n⚠ Pas de voix Piper de femme : installez par ex. %s") % "fr_FR-siwis-medium"
         elif self.pitch and not self.ffmpeg:
-            txt += "\n⚠ Tonalité Piper : installez ffmpeg"
+            txt += _("\n⚠ Tonalité Piper : installez ffmpeg")
         return txt
 
     def synth(self, text, wav_path, language=None):
@@ -686,7 +719,7 @@ class PiperEngine(Engine):
                              creationflags=NO_WINDOW)
         if not (os.path.isfile(raw) and os.path.getsize(raw) > 44):
             err = res.stderr.decode("utf-8", "replace").strip().splitlines()[-3:]
-            raise EngineError("Piper n'a pas produit d'audio (code %s).\n%s"
+            raise EngineError(_("Piper n'a pas produit d'audio (code %s).\n%s")
                               % (res.returncode, "\n".join(err)))
         if raw != wav_path:
             self._shift_pitch(raw, wav_path)
@@ -716,7 +749,7 @@ class SpdEngine(Engine):
     def __init__(self, cfg, language=None):
         self.bin = _which("spd-say")
         if not self.bin:
-            raise EngineError("spd-say introuvable : sudo apt install speech-dispatcher")
+            raise EngineError(_("spd-say introuvable : sudo apt install speech-dispatcher"))
         Engine.__init__(self, cfg, language)
 
     def voices(self):
@@ -734,11 +767,14 @@ class SpdEngine(Engine):
         for voice in self.voices():
             if voice[1].replace("_", "-").lower() == exact:
                 return voice[1]
-        return primary_language(language)
+        primary = primary_language(language)
+        known = [primary_language(voice[1]) for voice in self.voices()
+                 if same_language(voice[1], language)]
+        return primary if primary in known or not known else known[0]
 
     def describe(self):
-        mod = self.cfg.get("spd_module") or "module par défaut"
-        voice = self.cfg.get("spd_voice") or ("voix femme" if self.gender == "female" else "voix homme")
+        mod = self.cfg.get("spd_module") or _("module par défaut")
+        voice = self.cfg.get("spd_voice") or (_("voix femme") if self.gender == "female" else _("voix homme"))
         return "Speech Dispatcher · %s · %s" % (mod, voice)
 
     def speak_command(self, text, language=None):
@@ -750,8 +786,7 @@ class SpdEngine(Engine):
         if self.cfg.get("spd_module"):
             cmd += ["-o", self.cfg["spd_module"]]
         voice = self.cfg.get("spd_voice")
-        names = [v[0] for v in self.voices()
-                 if primary_language(v[1]) == primary_language(language)]
+        names = [v[0] for v in self.voices() if same_language(v[1], language)]
         if voice and (voice in names or not self.voices()):
             cmd += ["-y", voice]
         else:
@@ -810,8 +845,8 @@ class EspeakEngine(Engine):
     def __init__(self, cfg, language=None):
         self.bin = _which("espeak-ng", "espeak")
         if not self.bin:
-            raise EngineError("eSpeak NG introuvable : " + install_hint(
-                "espeak-ng", "espeak-ng", "installez eSpeak NG (github.com/espeak-ng/espeak-ng/releases)"))
+            raise EngineError(_("eSpeak NG introuvable : ") + install_hint(
+                "espeak-ng", "espeak-ng", _("installez eSpeak NG (github.com/espeak-ng/espeak-ng/releases)")))
         Engine.__init__(self, cfg, language)
 
     def voice(self, language=None):
@@ -830,7 +865,7 @@ class EspeakEngine(Engine):
         return base.split("+")[0] + ("+f3" if self.gender == "female" else "+m3")
 
     def describe(self):
-        return "eSpeak NG · voix : " + self.voice()
+        return _("eSpeak NG · voix : ") + self.voice()
 
     def _base(self, language=None):
         wpm = int(175 * self.speed / 100.0)
@@ -845,7 +880,7 @@ class EspeakEngine(Engine):
                        input=text.encode("utf-8"),
                        capture_output=True, timeout=600, creationflags=NO_WINDOW)
         if not os.path.isfile(wav_path):
-            raise EngineError("eSpeak n'a pas produit d'audio.")
+            raise EngineError(_("eSpeak n'a pas produit d'audio."))
 
 
 _SAPI_VOICES = []
@@ -908,7 +943,7 @@ class SapiEngine(Engine):
 
     def __init__(self, cfg, language=None):
         if not IS_WIN:
-            raise EngineError("Windows SAPI n'existe que sous Windows.")
+            raise EngineError(_("Windows SAPI n'existe que sous Windows."))
         Engine.__init__(self, cfg, language)
 
     def supports(self, language=None):
@@ -930,7 +965,7 @@ class SapiEngine(Engine):
         return name
 
     def describe(self):
-        return "Windows SAPI · " + (self._voice(self.language_for()) or "voix par défaut")
+        return "Windows SAPI · " + (self._voice(self.language_for()) or _("voix par défaut"))
 
     def _winrt_script(self, voice, text_file, wav_path):
         """Synthèse par l'API moderne : la voix, le débit et la tonalité sont tous respectés."""
@@ -1005,7 +1040,7 @@ class SapiEngine(Engine):
                         self._script(self._text_file(text), wav_path, language)],
                        capture_output=True, timeout=600, creationflags=NO_WINDOW)
         if not os.path.isfile(wav_path):
-            raise EngineError("SAPI n'a pas produit d'audio.")
+            raise EngineError(_("SAPI n'a pas produit d'audio."))
 
 
 _MAC_FEMALE = {"amélie", "amelie", "audrey", "aurélie", "aurelie", "marie", "virginie",
@@ -1033,7 +1068,7 @@ def parse_mac_genders(output):
     """Lignes nom|VoiceGenderFemale : dictionnaire nom → female, male ou None."""
     genders = {}
     for line in output.splitlines():
-        name, _, gender = line.strip().rpartition("|")
+        name, unused, gender = line.strip().rpartition("|")
         genders[name] = {"VoiceGenderFemale": "female", "VoiceGenderMale": "male"}.get(gender)
     return genders
 
@@ -1087,10 +1122,10 @@ class MacSayEngine(Engine):
 
     def __init__(self, cfg, language=None):
         if not IS_MAC:
-            raise EngineError("La synthèse « say » n'existe que sous macOS.")
+            raise EngineError(_("La synthèse « say » n'existe que sous macOS."))
         self.bin = _which("say")
         if not self.bin:
-            raise EngineError("Commande « say » introuvable.")
+            raise EngineError(_("Commande « say » introuvable."))
         self.voices = mac_voices()
         Engine.__init__(self, cfg, language)
 
@@ -1117,7 +1152,7 @@ class MacSayEngine(Engine):
         return Engine.signature(self) + (self.voice,)
 
     def describe(self):
-        return "macOS · voix : " + (self.voice or "voix par défaut du système")
+        return _("macOS · voix : ") + (self.voice or _("voix par défaut du système"))
 
     def _base(self, language=None):
         cmd = [self.bin, "-r", str(int(180 * self.speed / 100.0))]
@@ -1138,7 +1173,7 @@ class MacSayEngine(Engine):
                                        "--data-format=LEI16@22050", "-f", "-"],
                        input=self._text(text).encode("utf-8"), capture_output=True, timeout=600)
         if not (os.path.isfile(wav_path) and os.path.getsize(wav_path) > 44):
-            raise EngineError("« say » n'a pas produit d'audio.")
+            raise EngineError(_("« say » n'a pas produit d'audio."))
 
 
 ENGINES = {"piper": PiperEngine, "spd": SpdEngine, "espeak": EspeakEngine, "sapi": SapiEngine,
@@ -1154,8 +1189,8 @@ def resolve_engine(cfg, need_export=False, language=None, languages=None):
     if choice != "auto":
         engine = ENGINES[choice](cfg, language)
         if need_export and not engine.can_export:
-            raise EngineError("%s ne peut pas enregistrer de fichier audio.\n"
-                              "Choisissez Piper (recommandé) ou eSpeak NG dans les paramètres."
+            raise EngineError(_("%s ne peut pas enregistrer de fichier audio.\n"
+                              "Choisissez Piper (recommandé) ou eSpeak NG dans les paramètres.")
                               % engine.label)
         return engine
     order = [k for k in ENGINE_KEYS if k != "auto"]
@@ -1175,7 +1210,7 @@ def resolve_engine(cfg, need_export=False, language=None, languages=None):
         fallback = fallback or engine
     if fallback is not None:
         return fallback
-    raise EngineError("Aucun moteur de synthèse vocale utilisable.\n\n" + "\n".join(errors))
+    raise EngineError(_("Aucun moteur de synthèse vocale utilisable.\n\n") + "\n".join(errors))
 
 
 # --------------------------------------------------------------------------
@@ -1206,7 +1241,132 @@ def desktop(ctx):
     return ctx.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
 
 
+def _configuration(ctx, path, update=False):
+    node = uno.createUnoStruct("com.sun.star.beans.PropertyValue")
+    node.Name, node.Value = "nodepath", path
+    provider = ctx.ServiceManager.createInstanceWithContext(
+        "com.sun.star.configuration.ConfigurationProvider", ctx)
+    service = "ConfigurationUpdateAccess" if update else "ConfigurationAccess"
+    return provider.createInstanceWithArguments("com.sun.star.configuration." + service, (node,))
+
+
+def libreoffice_language(ctx):
+    """Langue de l'interface de LibreOffice (fr, en-US…), vide si elle est inconnue."""
+    try:
+        chosen = _configuration(ctx, "/org.openoffice.Office.Linguistic/General").UILocale
+        return chosen or _configuration(ctx, "/org.openoffice.Setup/L10N").ooLocale
+    except Exception as exc:
+        log("langue de LibreOffice:", exc)
+        return ""
+
+
+def resolve_ui_language(setting, libreoffice):
+    """Langue d'interface à utiliser ; l'anglais si la langue n'est pas traduite."""
+    wanted = primary_language(libreoffice if setting == "auto" else setting)
+    return wanted if wanted in [code for code, _name in UI_LANGUAGES] else "en"
+
+
+def load_ui_strings(language):
+    if language == "fr":
+        return {}
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "i18n", language + ".json")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        log("traductions:", path, exc)
+        return {}
+
+
+def apply_ui_language(ctx, cfg=None):
+    """Met l'interface dans la langue choisie, sinon celle de LibreOffice."""
+    cfg = cfg or load_config()
+    language = resolve_ui_language(cfg.get("ui_language") or "auto", libreoffice_language(ctx))
+    if language != _UI["language"]:
+        _UI["language"] = language
+        _UI["strings"] = load_ui_strings(language)
+    return language
+
+
+# Commande de chaque entrée de menu et texte source de son titre.
+MENU_TITLES = {"menu": "Lecture ~vocale", "quick": "Réglages rapides",
+               "toggle": "Lire / Pause", "readall": "Lire tout le document",
+               "stop": "Arrêter la lecture", "prev": "Phrase précédente",
+               "next": "Phrase suivante", "panel": "Panneau de lecture (débit, tonalité, voix)…",
+               "faster": "Débit +  (plus rapide)", "slower": "Débit −  (plus lent)",
+               "pitchup": "Tonalité +  (plus aiguë)", "pitchdown": "Tonalité −  (plus grave)",
+               "female": "Voix femme", "male": "Voix homme",
+               "resetvoice": "Débit et tonalité normaux",
+               "export": "Enregistrer en fichier audio…", "settings": "Paramètres avancés…",
+               "about": "À propos / diagnostic"}
+
+
+def _retitle(node, command):
+    title = MENU_TITLES.get(command)
+    if title and node.hasByName("Title"):
+        node.replaceByName("Title", _(title))
+
+
+def _retitle_items(items):
+    for name in items.getElementNames():
+        item = items.getByName(name)
+        url = item.getByName("URL") if item.hasByName("URL") else ""
+        submenu = item.getByName("Submenu") if item.hasByName("Submenu") else None
+        if submenu is not None and submenu.getElementNames():
+            _retitle(item, "quick")
+            _retitle_items(submenu)
+        elif "?" in url:
+            _retitle(item, url.rpartition("?")[2])
+
+
+def apply_menu_language(ctx):
+    """Écrit les titres des menus et de la barre d'outils dans la langue de l'interface.
+
+    LibreOffice les lit au démarrage : le changement prend effet à son redémarrage.
+    """
+    addons = "/org.openoffice.Office.Addons/AddonUI/"
+    menu = _configuration(ctx, addons + "OfficeMenuBar/com.adanalytics.lecturevocale.menu", True)
+    _retitle(menu, "menu")
+    _retitle_items(menu.getByName("Submenu"))
+    menu.commitChanges()
+    toolbar = _configuration(ctx, addons + "OfficeToolBar/com.adanalytics.lecturevocale.toolbar",
+                             True)
+    _retitle_items(toolbar)
+    toolbar.commitChanges()
+
+
+def active_document(ctx):
+    """Le document actif, ou à défaut le dernier ouvert.
+
+    getCurrentComponent() ne renvoie rien quand aucun document n'a le focus, par exemple
+    quand il est dans le panneau de lecture.
+    """
+    doc = desktop(ctx).getCurrentComponent()
+    if doc is not None and hasattr(doc, "getCurrentController"):
+        return doc
+    found = None
+    documents = desktop(ctx).getComponents().createEnumeration()
+    while documents.hasMoreElements():
+        candidate = documents.nextElement()
+        if hasattr(candidate, "getCurrentController") and candidate.getCurrentController():
+            found = candidate
+    return found
+
+
+def open_url(ctx, url):
+    """Ouvre une adresse dans le navigateur ; à défaut, l'affiche pour la copier."""
+    try:
+        shell = ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.system.SystemShellExecute", ctx)
+        shell.execute(url, "", 0)
+    except Exception as exc:
+        log("ouverture du lien:", exc)
+        msgbox(ctx, _("Ouvrez cette adresse dans votre navigateur :\n") + url)
+
+
 def msgbox(ctx, message, kind="infobox", title=TITLE):
+    if kind == "errorbox":
+        message += _("\n\nSi le problème persiste, signalez-le sur GitHub :\n") + ISSUES_URL
     log("msgbox[%s]:" % kind, message.replace("\n", " | "))
     if HEADLESS:
         return
@@ -1218,7 +1378,7 @@ def msgbox(ctx, message, kind="infobox", title=TITLE):
         except Exception:
             pass
         box = tk.createMessageBox(parent, uno.Enum("com.sun.star.awt.MessageBoxType", kind.upper()),
-                                  1, title, message)
+                                  1, _(title), message)
         box.execute()
         box.dispose()
     except Exception:
@@ -1230,7 +1390,7 @@ def flash_status(ctx, text, secs=2.5):
     log("statut:", text)
     try:
         ind = desktop(ctx).getCurrentFrame().createStatusIndicator()
-        ind.start("Lecture vocale — " + text, 0)
+        ind.start(_("Lecture vocale — ") + text, 0)
         threading.Timer(secs, lambda: run_in_main(ctx, ind.end)).start()
     except Exception:
         pass
@@ -1312,7 +1472,7 @@ def split_sentences(text):
 def _writer_sentences(text, start, end, limit=20000):
     out = []
     cur = text.createTextCursorByRange(start)
-    for _ in range(limit):
+    for unused in range(limit):
         sent = text.createTextCursorByRange(cur)
         sent.collapseToStart()
         try:
@@ -1482,7 +1642,7 @@ def _raw_segments(doc, ctrl, mode):
     if (doc.supportsService("com.sun.star.presentation.PresentationDocument")
             or doc.supportsService("com.sun.star.drawing.DrawingDocument")):
         return _draw_segments(doc, ctrl, mode)
-    raise EngineError("Ce type de document n'est pas pris en charge.")
+    raise EngineError(_("Ce type de document n'est pas pris en charge."))
 
 
 # --------------------------------------------------------------------------
@@ -1507,6 +1667,7 @@ class Reader(threading.Thread):
         self.proc = None
         self.lock = threading.Lock()
         self.finished_ok = False
+        self.keep_selection = False     # la pause garde la phrase surlignée
 
     # -- contrôle depuis l'extérieur ------------------------------------
     def _kill_current(self):
@@ -1575,7 +1736,7 @@ class Reader(threading.Thread):
         if self.restart_evt.is_set():
             return RESTART
         if proc.returncode not in (0, None):
-            raise EngineError("La commande « %s » a échoué (code %s)."
+            raise EngineError(_("La commande « %s » a échoué (code %s).")
                               % (os.path.basename(cmd[0]), proc.returncode))
         return status
 
@@ -1587,6 +1748,23 @@ class Reader(threading.Thread):
     def _refresh(self):
         self.restart_evt.clear()
         self.engine.update(load_config())
+
+    def _release_selection(self):
+        """Replie la sélection de Writer : la phrase surlignée ne doit pas rester sélectionnée.
+
+        Sinon la lecture ou l'export suivants ne porteraient que sur elle, et la prochaine
+        touche frappée la remplacerait.
+        """
+        ctrl = self.ctrl
+        if not self.highlight or self.keep_selection or not hasattr(ctrl, "getViewCursor"):
+            return
+
+        def do():
+            try:
+                ctrl.getViewCursor().collapseToStart()
+            except Exception as exc:    # document fermé pendant la lecture
+                log("sélection:", exc)
+        run_in_main(self.ctx, do)
 
     def _report(self):
         message = self.engine.take_warning()
@@ -1624,6 +1802,7 @@ class Reader(threading.Thread):
                 message = str(exc) or exc.__class__.__name__
                 run_in_main(self.ctx, lambda: msgbox(self.ctx, message, "errorbox"))
         finally:
+            self._release_selection()
             _on_reader_end(self)
 
     def _run_direct(self):
@@ -1679,7 +1858,7 @@ class Reader(threading.Thread):
                 i = self.index
                 if i >= n:
                     break
-                t, res, _ = job(i)
+                t, res, unused = job(i)
                 while t.is_alive() and not self.stop_evt.wait(0.03) \
                         and not self.restart_evt.is_set():
                     pass
@@ -1705,7 +1884,7 @@ class Reader(threading.Thread):
                     break
         finally:
             def cleanup():
-                for t, _, _ in list(jobs.values()):
+                for t, unused, unused in list(jobs.values()):
                     t.join(60)
                 shutil.rmtree(tmp, ignore_errors=True)
             threading.Thread(target=cleanup, daemon=True).start()
@@ -1766,6 +1945,7 @@ def pause_reading():
     reader = current_reader()
     if reader is None:
         return False
+    reader.keep_selection = True
     stop_reading(clear_pause=False)
     with STATE_LOCK:
         STATE.paused = {"segments": reader.segments, "index": reader.index,
@@ -1819,8 +1999,8 @@ def apply_live(ctx, announce=True, **changes):
         panel = ReadingPanel.instance
         run_in_main(ctx, panel.sync)
     if announce:
-        flash_status(ctx, "débit %d %% · tonalité %+d · voix %s"
-                     % (cfg["speed"], cfg["pitch"], "femme" if cfg["gender"] == "female" else "homme"))
+        flash_status(ctx, _("débit %d %% · tonalité %+d · voix %s")
+                     % (cfg["speed"], cfg["pitch"], _("femme") if cfg["gender"] == "female" else _("homme")))
     return cfg
 
 
@@ -1858,7 +2038,7 @@ def concat_wavs(paths, out_path, pause_ms=200):
                     out.setframerate(p.framerate)
                 elif (p.nchannels, p.sampwidth, p.framerate) != \
                         (params.nchannels, params.sampwidth, params.framerate):
-                    raise EngineError("Formats audio incompatibles entre les phrases.")
+                    raise EngineError(_("Formats audio incompatibles entre les phrases."))
                 if k and pause_ms:
                     n = int(params.framerate * pause_ms / 1000.0)
                     out.writeframes(b"\x00" * n * params.sampwidth * params.nchannels)
@@ -1877,7 +2057,7 @@ def export_audio(ctx, doc, ctrl):
     cfg = load_config()
     segments = collect_segments(doc, ctrl, "export")
     if not segments:
-        msgbox(ctx, "Rien à enregistrer : le document (ou la sélection) est vide.", "warningbox")
+        msgbox(ctx, _("Rien à enregistrer : le document (ou la sélection) est vide."), "warningbox")
         return
     # Une seule langue, donc une seule voix : les WAV à assembler doivent avoir le même format.
     language = segment_language(segments[0])
@@ -1895,7 +2075,7 @@ def export_audio(ctx, doc, ctrl):
     chosen = filters[0][0]
     if not out_path:
         out_path, chosen = file_dialog(ctx, True, filters, title + ".wav",
-                                       "Enregistrer la lecture audio")
+                                       _("Enregistrer la lecture audio"))
         if not out_path:
             return
     ext = os.path.splitext(out_path)[1].lower()
@@ -1903,10 +2083,10 @@ def export_audio(ctx, doc, ctrl):
         ext = {"*.mp3": ".mp3", "*.ogg": ".ogg"}.get(dict(filters).get(chosen or "", "*.wav"), ".wav")
         out_path += ext
     if ext != ".wav" and not ffmpeg:
-        raise EngineError("ffmpeg est nécessaire pour le MP3/OGG : " + install_hint(
+        raise EngineError(_("ffmpeg est nécessaire pour le MP3/OGG : ") + install_hint(
             "ffmpeg", "ffmpeg", "winget install ffmpeg"))
 
-    status = StatusBar(ctx, ctrl, "Lecture vocale : synthèse audio…", len(segments))
+    status = StatusBar(ctx, ctrl, _("Lecture vocale : synthèse audio…"), len(segments))
 
     def work():
         tmp = tempfile.mkdtemp(prefix="lvlo_exp_")
@@ -1916,7 +2096,7 @@ def export_audio(ctx, doc, ctrl):
                 p = os.path.join(tmp, "%06d.wav" % i)
                 engine.synth(segment[0], p, language)
                 paths.append(p)
-                status.value(i + 1, "Lecture vocale : phrase %d / %d" % (i + 1, len(segments)))
+                status.value(i + 1, _("Lecture vocale : phrase %d / %d") % (i + 1, len(segments)))
             wav_path = out_path if ext == ".wav" else os.path.join(tmp, "complet.wav")
             concat_wavs(paths, wav_path, int(cfg.get("pause_ms", 200)))
             if ext != ".wav":
@@ -1926,11 +2106,11 @@ def export_audio(ctx, doc, ctrl):
                                      + codec + [out_path], capture_output=True,
                                      creationflags=NO_WINDOW)
                 if res.returncode != 0:
-                    raise EngineError("Conversion ffmpeg échouée :\n"
+                    raise EngineError(_("Conversion ffmpeg échouée :\n")
                                       + res.stderr.decode("utf-8", "replace")[-400:])
             secs = _wav_seconds(wav_path)
             log("export ok:", out_path, "%ds" % secs)
-            msg = ("Fichier audio enregistré (%d phrases, %d min %02d s) :\n%s"
+            msg = (_("Fichier audio enregistré (%d phrases, %d min %02d s) :\n%s")
                    % (len(segments), secs // 60, secs % 60, out_path))
             warning = engine.take_warning()
             if warning:
@@ -1938,7 +2118,7 @@ def export_audio(ctx, doc, ctrl):
             run_in_main(ctx, lambda: msgbox(ctx, msg))
         except Exception as exc:
             log("export:", traceback.format_exc())
-            message = "Échec de l'export audio :\n" + str(exc)
+            message = _("Échec de l'export audio :\n") + str(exc)
             run_in_main(ctx, lambda: msgbox(ctx, message, "errorbox"))
         finally:
             status.end()
@@ -2062,7 +2242,7 @@ class ReadingPanel(_DialogBase):
     W, H = 206, 150
 
     def __init__(self, ctx):
-        self._init_model(ctx, "Lecture vocale", self.W, self.H)
+        self._init_model(ctx, _("Lecture vocale"), self.W, self.H)
         self.syncing = False
         self.pending = {}
         self.timer = None
@@ -2078,7 +2258,7 @@ class ReadingPanel(_DialogBase):
         self._create(parent)
         self.actions = _ActionListener(self.on_action)
         self._buttons(self.actions, ["prev", "toggle", "next", "stop", "rSpeed", "rPitch",
-                                     "settings", "close"])
+                                     "settings", "about", "close"])
         self.adjust = _AdjustListener(self.on_adjust)
         self.ctl("speed").addAdjustmentListener(self.adjust)
         self.ctl("pitch").addAdjustmentListener(self.adjust)
@@ -2097,31 +2277,32 @@ class ReadingPanel(_DialogBase):
     def _build(self):
         x0 = 6
         y = 6
-        self._add("Button", "prev", x0, y, 30, 16, Label="◀◀", HelpText="Phrase précédente")
-        self._add("Button", "toggle", x0 + 33, y, 70, 16, Label="▶  Lire")
-        self._add("Button", "next", x0 + 106, y, 30, 16, Label="▶▶", HelpText="Phrase suivante")
-        self._add("Button", "stop", x0 + 139, y, 55, 16, Label="■  Arrêter")
+        self._add("Button", "prev", x0, y, 30, 16, Label="◀◀", HelpText=_("Phrase précédente"))
+        self._add("Button", "toggle", x0 + 33, y, 70, 16, Label=_("▶  Lire"))
+        self._add("Button", "next", x0 + 106, y, 30, 16, Label="▶▶", HelpText=_("Phrase suivante"))
+        self._add("Button", "stop", x0 + 139, y, 55, 16, Label=_("■  Arrêter"))
         y += 21
-        self._add("FixedText", "status", x0, y, self.W - 12, 10, Label="Prêt", TextColor=0x505050)
+        self._add("FixedText", "status", x0, y, self.W - 12, 10, Label=_("Prêt"), TextColor=0x505050)
         y += 15
-        for key, label, lo, hi, step in (("speed", "Débit", SPEED_MIN, SPEED_MAX, SPEED_STEP),
-                                         ("pitch", "Tonalité", PITCH_MIN, PITCH_MAX, 1)):
+        for key, label, lo, hi, step in (("speed", _("Débit"), SPEED_MIN, SPEED_MAX, SPEED_STEP),
+                                         ("pitch", _("Tonalité"), PITCH_MIN, PITCH_MAX, 1)):
             self._add("FixedText", "l" + key, x0, y + 1, 36, 10, Label=label)
             self._add("ScrollBar", key, x0 + 38, y, 110, 11, Orientation=0,
                       ScrollValueMin=lo, ScrollValueMax=hi, LineIncrement=step,
                       BlockIncrement=step * 2, VisibleSize=0)
             self._add("FixedText", "v" + key, x0 + 152, y + 1, 26, 10, Align=2)
             self._add("Button", "r" + key.capitalize(), x0 + 181, y - 1, 13, 13, Label="↺",
-                      HelpText="Valeur normale")
+                      HelpText=_("Valeur normale"))
             y += 17
-        self._add("FixedText", "lvoice", x0, y + 1, 36, 10, Label="Voix")
-        self._add("RadioButton", "female", x0 + 38, y, 50, 11, Label="Femme")
-        self._add("RadioButton", "male", x0 + 92, y, 50, 11, Label="Homme")
+        self._add("FixedText", "lvoice", x0, y + 1, 36, 10, Label=_("Voix"))
+        self._add("RadioButton", "female", x0 + 38, y, 50, 11, Label=_("Femme"))
+        self._add("RadioButton", "male", x0 + 92, y, 50, 11, Label=_("Homme"))
         y += 16
         self._add("FixedText", "info", x0, y, self.W - 12, 22, MultiLine=True, TextColor=0x707070)
         by = self.H - 20
-        self._add("Button", "settings", x0, by, 100, 14, Label="Paramètres avancés…")
-        self._add("Button", "close", self.W - 56, by, 50, 14, Label="Fermer")
+        self._add("Button", "settings", x0, by, 94, 14, Label=_("Paramètres avancés…"))
+        self._add("Button", "about", x0 + 98, by, 48, 14, Label=_("À propos"))
+        self._add("Button", "close", self.W - 50, by, 44, 14, Label=_("Fermer"))
 
     def _place(self, parent):
         """Place le panneau en haut à droite de la fenêtre du document."""
@@ -2156,7 +2337,7 @@ class ReadingPanel(_DialogBase):
     def _info(self, cfg=None):
         try:
             engine = resolve_engine(cfg or load_config())
-            text = "Moteur : " + engine.describe()
+            text = _("Moteur : ") + engine.describe()
         except EngineError as exc:
             text = "⚠ " + str(exc).splitlines()[0]
         self.model.getByName("info").Label = text
@@ -2171,11 +2352,11 @@ class ReadingPanel(_DialogBase):
                 return
             state, i, n = reading_status()
             if state == "lecture":
-                status, button = "Lecture : phrase %d / %d" % (i + 1, n), "‖  Pause"
+                status, button = _("Lecture : phrase %d / %d") % (i + 1, n), _("‖  Pause")
             elif state == "pause":
-                status, button = "En pause : phrase %d / %d" % (i + 1, n), "▶  Reprendre"
+                status, button = _("En pause : phrase %d / %d") % (i + 1, n), _("▶  Reprendre")
             else:
-                status, button = "Prêt — lit la sélection ou depuis le curseur", "▶  Lire"
+                status, button = _("Prêt — lit la sélection ou depuis le curseur"), _("▶  Lire")
             m = self.model
             if m.getByName("status").Label != status:
                 m.getByName("status").Label = status
@@ -2202,6 +2383,8 @@ class ReadingPanel(_DialogBase):
         elif cmd == "settings":
             if SettingsDialog(self.ctx).execute():
                 apply_live(self.ctx, announce=False)
+        elif cmd == "about":
+            AboutDialog(self.ctx).execute()
         elif cmd == "close":
             self.close()
 
@@ -2263,88 +2446,98 @@ class ReadingPanel(_DialogBase):
 # --------------------------------------------------------------------------
 
 class SettingsDialog(_DialogBase):
-    W, H = 300, 278
+    W, H = 300, 298
 
     def __init__(self, ctx):
-        self._init_model(ctx, "Lecture vocale — paramètres", self.W, self.H)
+        self._init_model(ctx, _("Lecture vocale — paramètres"), self.W, self.H)
         self.cfg = load_config()
         self._build()
         self._create()
         self._fill()
         self.listener = _ActionListener(self.on_action)
-        self._buttons(self.listener, ["btnPiper", "btnModelF", "btnModelM", "btnTest", "btnRefresh"])
+        self._buttons(self.listener, ["btnPiper", "btnModelF", "btnModelM", "btnTest", "btnRefresh",
+                                      "btnAbout"])
 
     def _build(self):
         L, F = 8, 96
         W = self.W - F - 8 - 22
         y = 8
-        self._add("FixedText", "lEngine", L, y + 2, 86, 10, Label="Moteur de synthèse")
+        self._add("FixedText", "lUiLanguage", L, y + 2, 86, 10, Label=_("Langue de l'interface"))
+        names = [_("Automatique (langue de LibreOffice)")] + [name for _code, name in UI_LANGUAGES]
+        self._add("ListBox", "ui_language", F, y, W + 22, 13, Dropdown=True,
+                  StringItemList=tuple(names))
+        y += 20
+        self._add("FixedText", "lEngine", L, y + 2, 86, 10, Label=_("Moteur de synthèse"))
         self._add("ListBox", "engine", F, y, W + 22, 13, Dropdown=True,
-                  StringItemList=tuple(ENGINE_LABELS))
+                  StringItemList=tuple(_(label) for label in ENGINE_LABELS))
         y += 22
-        self._add("FixedLine", "fl1", L, y, self.W - 16, 8, Label="Piper (voix neuronales)")
+        self._add("FixedLine", "fl1", L, y, self.W - 16, 8, Label=_("Piper (voix neuronales)"))
         y += 12
-        self._add("FixedText", "lPiper", L, y + 2, 86, 10, Label="Exécutable piper")
+        self._add("FixedText", "lPiper", L, y + 2, 86, 10, Label=_("Exécutable piper"))
         self._add("Edit", "piper_bin", F, y, W, 13)
         self._add("Button", "btnPiper", F + W + 4, y, 18, 13, Label="…")
         y += 17
-        self._add("FixedText", "lModelF", L, y + 2, 86, 10, Label="Voix femme (.onnx)")
+        self._add("FixedText", "lModelF", L, y + 2, 86, 10, Label=_("Voix femme (.onnx)"))
         self._add("ComboBox", "piper_model_female", F, y, W, 13, Dropdown=True)
         self._add("Button", "btnModelF", F + W + 4, y, 18, 13, Label="…")
         y += 17
-        self._add("FixedText", "lModelM", L, y + 2, 86, 10, Label="Voix homme (.onnx)")
+        self._add("FixedText", "lModelM", L, y + 2, 86, 10, Label=_("Voix homme (.onnx)"))
         self._add("ComboBox", "piper_model_male", F, y, W, 13, Dropdown=True)
         self._add("Button", "btnModelM", F + W + 4, y, 18, 13, Label="…")
         y += 21
-        self._add("FixedLine", "fl2", L, y, self.W - 16, 8, Label="Réglages par défaut")
+        self._add("FixedLine", "fl2", L, y, self.W - 16, 8, Label=_("Réglages par défaut"))
         y += 12
-        self._add("FixedText", "lSpeed", L, y + 2, 86, 10, Label="Débit (%)")
+        self._add("FixedText", "lSpeed", L, y + 2, 86, 10, Label=_("Débit (%)"))
         self._add("NumericField", "speed", F, y, 40, 13, ValueMin=float(SPEED_MIN),
                   ValueMax=float(SPEED_MAX), ValueStep=float(SPEED_STEP), DecimalAccuracy=0,
                   Spin=True, StrictFormat=True)
-        self._add("FixedText", "lPitch", F + 50, y + 2, 38, 10, Label="Tonalité")
+        self._add("FixedText", "lPitch", F + 50, y + 2, 38, 10, Label=_("Tonalité"))
         self._add("NumericField", "pitch", F + 90, y, 36, 13, ValueMin=float(PITCH_MIN),
                   ValueMax=float(PITCH_MAX), ValueStep=1.0, DecimalAccuracy=0, Spin=True,
                   StrictFormat=True)
         y += 17
-        self._add("FixedText", "lGender", L, y + 2, 86, 10, Label="Voix")
-        self._add("ListBox", "gender", F, y, 50, 13, Dropdown=True, StringItemList=("Femme", "Homme"))
-        self._add("FixedText", "lLang", F + 56, y + 2, 32, 10, Label="Langue")
+        self._add("FixedText", "lGender", L, y + 2, 86, 10, Label=_("Voix"))
+        self._add("ListBox", "gender", F, y, 50, 13, Dropdown=True, StringItemList=(_("Femme"), _("Homme")))
+        self._add("FixedText", "lLang", F + 56, y + 2, 32, 10, Label=_("Langue"))
         self._add("Edit", "language", F + 90, y, 36, 13,
-                  HelpText="auto = langue du texte ; ou un code pour la forcer : fr, en, de…")
+                  HelpText=_("auto = langue du texte ; ou un code pour la forcer : fr, en, de…"))
         y += 17
         self._add("CheckBox", "highlight", F, y, W + 22, 12,
-                  Label="Surligner la phrase en cours de lecture")
+                  Label=_("Surligner la phrase en cours de lecture"))
         y += 18
-        self._add("FixedLine", "fl3", L, y, self.W - 16, 8, Label="Autres moteurs (facultatif)")
+        self._add("FixedLine", "fl3", L, y, self.W - 16, 8, Label=_("Autres moteurs (facultatif)"))
         y += 12
-        self._add("FixedText", "lSpdMod", L, y + 2, 86, 10, Label="Module spd-say")
+        self._add("FixedText", "lSpdMod", L, y + 2, 86, 10, Label=_("Module spd-say"))
         self._add("Edit", "spd_module", F, y, 70, 13,
-                  HelpText="vide = module par défaut ; ex. espeak-ng-mbrola-generic, piper")
-        self._add("FixedText", "lSpdVoice", F + 76, y + 2, 24, 10, Label="Voix")
+                  HelpText=_("vide = module par défaut ; ex. espeak-ng-mbrola-generic, piper"))
+        self._add("FixedText", "lSpdVoice", F + 76, y + 2, 24, 10, Label=_("Voix"))
         self._add("ComboBox", "spd_voice", F + 100, y, W - 78, 13, Dropdown=True,
-                  HelpText="vide = voix choisie selon la langue et le genre")
+                  HelpText=_("vide = voix choisie selon la langue et le genre"))
         y += 17
         self._add("FixedText", "lEspeak", L, y + 2, 86, 10,
-                  Label="Voix eSpeak" + (" / SAPI" if IS_WIN else " / macOS" if IS_MAC else ""))
-        self._add("Edit", "espeak_voice", F, y, 70, 13, HelpText="vide = langue du texte ; ex. fr, mb-fr4 (MBROLA)")
+                  Label=_("Voix eSpeak") + (" / SAPI" if IS_WIN else " / macOS" if IS_MAC else ""))
+        self._add("Edit", "espeak_voice", F, y, 70, 13, HelpText=_("vide = langue du texte ; ex. fr, mb-fr4 (MBROLA)"))
         if IS_WIN:
             self._add("ComboBox", "sapi_voice", F + 76, y, W - 54, 13, Dropdown=True,
-                      HelpText="vide = voix choisie selon la langue et le genre")
+                      HelpText=_("vide = voix choisie selon la langue et le genre"))
         if IS_MAC:
             self._add("ComboBox", "mac_voice", F + 76, y, W - 54, 13, Dropdown=True,
-                      HelpText="vide = voix choisie selon la langue et le genre")
+                      HelpText=_("vide = voix choisie selon la langue et le genre"))
         y += 19
         self._add("FixedText", "detect", L, y, self.W - 16, 20, MultiLine=True, TextColor=0x606060)
         by = self.H - 20
-        self._add("Button", "btnRefresh", L, by, 54, 14, Label="Redétecter")
-        self._add("Button", "btnTest", L + 58, by, 54, 14, Label="▶ Tester")
+        self._add("Button", "btnRefresh", L, by, 54, 14, Label=_("Redétecter"))
+        self._add("Button", "btnTest", L + 58, by, 54, 14, Label=_("▶ Tester"))
+        self._add("Button", "btnAbout", L + 116, by, 54, 14, Label=_("À propos"))
         self._add("Button", "ok", self.W - 116, by, 52, 14, Label="OK", PushButtonType=1,
                   DefaultButton=True)
-        self._add("Button", "cancel", self.W - 60, by, 52, 14, Label="Annuler", PushButtonType=2)
+        self._add("Button", "cancel", self.W - 60, by, 52, 14, Label=_("Annuler"), PushButtonType=2)
 
     def _fill(self):
         c = self.cfg
+        codes = ["auto"] + [code for code, _name in UI_LANGUAGES]
+        chosen = c.get("ui_language", "auto")
+        self.ctl("ui_language").selectItemPos(codes.index(chosen) if chosen in codes else 0, True)
         key = c.get("engine", "auto")
         self.ctl("engine").selectItemPos(ENGINE_KEYS.index(key) if key in ENGINE_KEYS else 0, True)
         self.ctl("piper_bin").setText(c.get("piper_bin") or find_piper(c))
@@ -2389,10 +2582,12 @@ class SettingsDialog(_DialogBase):
             combo.setText(current)
 
     def _detect(self):
-        self.model.getByName("detect").Label = "Détecté : " + detection_summary(self.read())
+        self.model.getByName("detect").Label = _("Détecté : ") + detection_summary(self.read())
 
     def read(self):
         c = dict(self.cfg)
+        codes = ["auto"] + [code for code, _name in UI_LANGUAGES]
+        c["ui_language"] = codes[max(0, self.ctl("ui_language").getSelectedItemPos())]
         pos = self.ctl("engine").getSelectedItemPos()
         c["engine"] = ENGINE_KEYS[pos] if 0 <= pos < len(ENGINE_KEYS) else "auto"
         c["piper_bin"] = self.ctl("piper_bin").getText().strip()
@@ -2414,27 +2609,29 @@ class SettingsDialog(_DialogBase):
 
     def on_action(self, cmd):
         if cmd == "btnPiper":
-            path, _ = file_dialog(self.ctx, title="Choisir l'exécutable piper")
+            path, unused = file_dialog(self.ctx, title=_("Choisir l'exécutable piper"))
             if path:
                 self.ctl("piper_bin").setText(path)
                 self._detect()
         elif cmd in ("btnModelF", "btnModelM"):
-            path, _ = file_dialog(self.ctx, filters=[("Voix Piper (*.onnx)", "*.onnx")],
-                                  title="Choisir une voix Piper")
+            path, unused = file_dialog(self.ctx, filters=[(_("Voix Piper (*.onnx)"), "*.onnx")],
+                                  title=_("Choisir une voix Piper"))
             if path:
                 if not os.path.isfile(path + ".json"):
-                    msgbox(self.ctx, "Le fichier %s.json doit se trouver à côté de la voix."
+                    msgbox(self.ctx, _("Le fichier %s.json doit se trouver à côté de la voix.")
                            % os.path.basename(path), "warningbox")
                 self.ctl("piper_model_" + ("female" if cmd == "btnModelF" else "male")).setText(path)
                 self._detect()
+        elif cmd == "btnAbout":
+            AboutDialog(self.ctx).execute()
         elif cmd == "btnRefresh":
             self.cfg = self.read()
             self._fill_models(refresh=True)
             self._detect()
         elif cmd == "btnTest":
             cfg = self.read()
-            language = "fr" if cfg["language"].lower() == "auto" else cfg["language"]
-            sample = SAMPLE_TEXT_EN if primary_language(language) == "en" else SAMPLE_TEXT
+            language = _UI["language"] if cfg["language"].lower() == "auto" else cfg["language"]
+            sample = _(SAMPLE_TEXT)
             try:
                 engine = resolve_engine(cfg, language=language)
             except EngineError as exc:
@@ -2451,9 +2648,58 @@ class SettingsDialog(_DialogBase):
         cfg = self.read()
         self.dialog.dispose()
         if ok:
+            previous = load_config().get("ui_language")
             save_config(cfg)
             log("paramètres enregistrés:", json.dumps(cfg, ensure_ascii=False))
+            if cfg["ui_language"] != previous:
+                apply_ui_language(self.ctx, cfg)
+                apply_menu_language(self.ctx)
+                msgbox(self.ctx, _("Les menus changeront de langue au prochain démarrage "
+                                   "de LibreOffice."))
         return ok
+
+
+# --------------------------------------------------------------------------
+# À propos
+# --------------------------------------------------------------------------
+
+class AboutDialog(_DialogBase):
+    W, H = 250, 172
+
+    def __init__(self, ctx):
+        self._init_model(ctx, _("À propos de Lecture vocale"), self.W, self.H)
+        self._build()
+        self._create()
+        self.listener = _ActionListener(self.on_action)
+        self._buttons(self.listener, ["issue", "star"])
+
+    def _build(self):
+        L, width = 10, self.W - 20
+        self._add("FixedText", "name", L, 8, width, 12, Label=_(TITLE) + " " + VERSION,
+                  FontWeight=150.0)
+        self._add("FixedText", "editor", L, 22, width, 22, MultiLine=True,
+                  Label=_("Par XGEOSOFT CORPORATION et ADAnalytics.\n"
+                        "Logiciel libre, gratuit et hors ligne (licence MIT)."))
+        self._add("FixedText", "problem", L, 50, width, 22, MultiLine=True,
+                  Label=_("Une erreur, une voix qui ne fonctionne pas ? Signalez-le sur GitHub : "
+                        "votre retour nous aide à corriger l'extension."))
+        self._add("Button", "issue", L, 74, width, 15, Label=_("Signaler un problème sur GitHub"))
+        self._add("FixedText", "thanks", L, 96, width, 22, MultiLine=True,
+                  Label=_("L'extension vous rend service ? Encouragez XGEOSOFT CORPORATION "
+                        "en lui donnant une étoile sur GitHub. Merci !"))
+        self._add("Button", "star", L, 120, width, 15, Label=_("★ Encourager le projet sur GitHub"))
+        self._add("Button", "close", self.W - 60, self.H - 22, 50, 14, Label=_("Fermer"),
+                  PushButtonType=2, DefaultButton=True)
+
+    def on_action(self, cmd):
+        open_url(self.ctx, ISSUES_URL if cmd == "issue" else GITHUB_URL)
+
+    def execute(self):
+        if HEADLESS:
+            log("à propos prêt")
+        else:
+            self.dialog.execute()
+        self.dialog.dispose()
 
 
 # --------------------------------------------------------------------------
@@ -2466,6 +2712,10 @@ QUICK = ("faster", "slower", "pitchup", "pitchdown", "female", "male", "resetvoi
 def run_command(ctx, command):
     try:
         log("commande:", command)
+        apply_ui_language(ctx)
+        if command == "menulanguage":   # pour les tests : même effet que l'option
+            apply_menu_language(ctx)
+            return
         if command == "stop":
             stop_reading()
             return
@@ -2488,15 +2738,12 @@ def run_command(ctx, command):
             dlg.dialog.dispose()
             return
         if command == "about":
-            msgbox(ctx, "Lecture vocale %s — ADAnalytics\n\nMoteurs : Piper, Speech Dispatcher, "
-                        "eSpeak NG / MBROLA, Windows SAPI, macOS.\n\nDétecté : %s\n\n"
-                        "Paramètres : %s\nJournal : %s"
-                   % (VERSION, detection_summary(load_config()), CONFIG_FILE, LOG_FILE))
+            AboutDialog(ctx).execute()
             return
 
-        doc = desktop(ctx).getCurrentComponent()
-        if doc is None or not hasattr(doc, "getCurrentController"):
-            msgbox(ctx, "Ouvrez d'abord un document.", "warningbox")
+        doc = active_document(ctx)
+        if doc is None:
+            msgbox(ctx, _("Ouvrez d'abord un document."), "warningbox")
             return
         ctrl = doc.getCurrentController()
 
@@ -2517,14 +2764,14 @@ def run_command(ctx, command):
         if command in ("read", "readall"):
             segments = collect_segments(doc, ctrl, "all" if command == "readall" else "cursor")
             if not segments:
-                msgbox(ctx, "Rien à lire : le document (ou la sélection) est vide.", "warningbox")
+                msgbox(ctx, _("Rien à lire : le document (ou la sélection) est vide."), "warningbox")
                 return
             start_reading(ctx, doc, ctrl, segments, 0)
     except EngineError as exc:
         msgbox(ctx, str(exc), "errorbox")
     except Exception:
         log("commande:", traceback.format_exc())
-        msgbox(ctx, "Erreur inattendue. Détails dans le journal :\n" + LOG_FILE, "errorbox")
+        msgbox(ctx, _("Erreur inattendue. Détails dans le journal :\n") + LOG_FILE, "errorbox")
 
 
 class LectureVocale(unohelper.Base, XJobExecutor):

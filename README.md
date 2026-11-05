@@ -31,7 +31,8 @@ computer: no account, no internet connection, and your text never leaves your ma
 - **Reading mode per application**: sentence by sentence in Writer, row by row in Calc, shape by
   shape in Impress and Draw.
 
-The extension's interface is in French.
+- **Interface in six languages**: English, French, German, Italian, Portuguese and Spanish. Menus,
+  buttons and messages follow the language of LibreOffice, and you can choose another one.
 
 ### Requirements
 
@@ -73,8 +74,8 @@ Version 1.3.0 replaces 1.2 directly, and your settings are kept.
 | Shortcut | Action |
 |---|---|
 | Ctrl+Alt+Shift+L | Read / pause |
-| Ctrl+Alt+Shift+K | Stop |
-| Ctrl+Alt+Shift+P | Reading panel |
+| Ctrl+Alt+Shift+S | Stop |
+| Ctrl+Alt+Shift+O | Reading panel |
 | Ctrl+Alt+Shift+N | Next sentence |
 | Ctrl+Alt+Shift+B | Previous sentence |
 | Ctrl+Alt+Shift+Page Up / Page Down | Faster / slower |
@@ -121,6 +122,17 @@ Pitch control depends on the engine:
 
 Audio export uses one voice for the whole file, chosen from the language of the first sentence.
 
+### Interface language
+
+By default, the menus, buttons and messages use the language of LibreOffice. If that language is not
+translated, they appear in English.
+
+To choose another language, open **Lecture vocale ▸ Advanced Settings** and change **Interface
+language**. Windows and messages change at once; the menus change the next time LibreOffice starts.
+
+To add a language, copy `extension/python/i18n/en.json`, translate its values, then add the language
+to `UI_LANGUAGES` in `lecture_vocale.py` and to the titles in `Addons.xcu`.
+
 ### Building from source
 
 Only Python 3.8 or later is needed:
@@ -144,6 +156,7 @@ python -m unittest discover -s tests
 | Path | Content |
 |---|---|
 | `extension/python/lecture_vocale.py` | All the extension's code |
+| `extension/python/i18n/` | Interface translations |
 | `extension/Addons.xcu`, `Accelerators.xcu` | Menu, toolbar and shortcuts |
 | `extension/description.xml` | Identifier, version, minimum LibreOffice version |
 | `build.py` | Builds the `.oxt` |
@@ -152,16 +165,37 @@ python -m unittest discover -s tests
 ### Troubleshooting
 
 Settings and the log file are in `%APPDATA%\lecture-vocale-libreoffice` on Windows, and in
-`~/.config/lecture-vocale-libreoffice` on Linux and macOS. **Lecture vocale ▸ About** shows the
+`~/.config/lecture-vocale-libreoffice` on Linux and macOS. **Lecture vocale ▸ Settings** shows the
 engines detected on your computer.
+
+### Help and support
+
+Found a bug, or a voice that does not work?
+[Open an issue on GitHub](https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/issues).
+
+Does the extension help you? Encourage XGEOSOFT CORPORATION with a star on
+[GitHub](https://github.com/XGEOSOFT-CORPORATION/lecture-vocale).
+
+The **About** window has a button for each. Open it from the **Lecture vocale** menu, the reading
+panel or the settings.
 
 ### Changelog
 
 **1.3.0**
 
+- New **About** window, with links to report a problem and to encourage the project on GitHub.
+- The interface is now available in six languages, follows LibreOffice by default, and has an option
+  to choose another language.
+- The toolbar now has its real name, instead of "Add-on 2", and is docked at the top.
 - Fixed: text could be read by a voice of the wrong language, usually English.
 - Fixed: the female/male choice was ignored by Windows voices, and Piper could use a voice of the
   wrong gender.
+- Fixed: keyboard shortcuts did not work at all. Stop is now Ctrl+Alt+Shift+S and the reading
+  panel Ctrl+Alt+Shift+O, because K and P are taken in Impress and Draw.
+- Fixed: "Open a document first" could appear while a document was open.
+- Fixed: after stopping, the sentence stayed selected, so the next reading or audio export covered
+  only that sentence, and typing could replace it.
+- Fixed: settings changed quickly during reading could be lost on Windows.
 - Windows: all installed voices are now available, not only the older ones, with real pitch control.
 - macOS: the gender of each voice now comes from the system, for all languages.
 - Linux: Speech Dispatcher is now the default engine, and regional variants such as pt-BR are used.
@@ -201,7 +235,8 @@ ordinateur : pas de compte, pas de connexion Internet, et votre texte ne quitte 
 - **Mode de lecture adapté** : phrase par phrase dans Writer, ligne par ligne dans Calc, forme par
   forme dans Impress et Draw.
 
-L'interface de l'extension est en français.
+- **Interface en six langues** : allemand, anglais, espagnol, français, italien et portugais. Menus,
+  boutons et messages suivent la langue de LibreOffice, et vous pouvez en choisir une autre.
 
 ### Prérequis
 
@@ -244,8 +279,8 @@ La version 1.3.0 remplace directement la 1.2, et vos réglages sont conservés.
 | Raccourci | Action |
 |---|---|
 | Ctrl+Alt+Maj+L | Lire / mettre en pause |
-| Ctrl+Alt+Maj+K | Arrêter |
-| Ctrl+Alt+Maj+P | Panneau de lecture |
+| Ctrl+Alt+Maj+S | Arrêter |
+| Ctrl+Alt+Maj+O | Panneau de lecture |
 | Ctrl+Alt+Maj+N | Phrase suivante |
 | Ctrl+Alt+Maj+B | Phrase précédente |
 | Ctrl+Alt+Maj+Page↑ / Page↓ | Plus vite / moins vite |
@@ -293,6 +328,18 @@ Le réglage de la tonalité dépend du moteur :
 L'export audio utilise une seule voix pour tout le fichier, choisie d'après la langue de la première
 phrase.
 
+### Langue de l'interface
+
+Par défaut, les menus, les boutons et les messages utilisent la langue de LibreOffice. Si cette langue
+n'est pas traduite, ils s'affichent en anglais.
+
+Pour choisir une autre langue, ouvrez **Lecture vocale ▸ Paramètres avancés** et changez **Langue de
+l'interface**. Les fenêtres et les messages changent aussitôt ; les menus changent au prochain
+démarrage de LibreOffice.
+
+Pour ajouter une langue, copiez `extension/python/i18n/en.json`, traduisez ses valeurs, puis ajoutez la
+langue à `UI_LANGUAGES` dans `lecture_vocale.py` et aux titres de `Addons.xcu`.
+
 ### Construire depuis les sources
 
 Seul Python 3.8 ou plus récent est nécessaire :
@@ -316,6 +363,7 @@ python -m unittest discover -s tests
 | Chemin | Contenu |
 |---|---|
 | `extension/python/lecture_vocale.py` | Tout le code de l'extension |
+| `extension/python/i18n/` | Traductions de l'interface |
 | `extension/Addons.xcu`, `Accelerators.xcu` | Menu, barre d'outils et raccourcis |
 | `extension/description.xml` | Identifiant, version, version minimale de LibreOffice |
 | `build.py` | Construit le `.oxt` |
@@ -324,16 +372,38 @@ python -m unittest discover -s tests
 ### Dépannage
 
 Les réglages et le journal se trouvent dans `%APPDATA%\lecture-vocale-libreoffice` sous Windows, et
-dans `~/.config/lecture-vocale-libreoffice` sous Linux et macOS. **Lecture vocale ▸ À propos** affiche
-les moteurs détectés sur votre ordinateur.
+dans `~/.config/lecture-vocale-libreoffice` sous Linux et macOS. **Lecture vocale ▸ Paramètres**
+affiche les moteurs détectés sur votre ordinateur.
+
+### Aide et soutien
+
+Une erreur, une voix qui ne fonctionne pas ?
+[Ouvrez un ticket sur GitHub](https://github.com/XGEOSOFT-CORPORATION/lecture-vocale/issues).
+
+L'extension vous rend service ? Encouragez XGEOSOFT CORPORATION avec une étoile sur
+[GitHub](https://github.com/XGEOSOFT-CORPORATION/lecture-vocale).
+
+La fenêtre **À propos** propose un bouton pour chacun. Elle s'ouvre depuis le menu **Lecture vocale**,
+le panneau de lecture ou les paramètres.
 
 ### Historique des versions
 
 **1.3.0**
 
+- Nouvelle fenêtre **À propos**, avec des liens pour signaler un problème et encourager le projet sur
+  GitHub.
+- L'interface existe désormais en six langues, suit LibreOffice par défaut, et une option permet d'en
+  choisir une autre.
+- La barre d'outils porte son vrai nom, au lieu de « Add-on 2 », et s'ancre en haut.
 - Corrigé : le texte pouvait être lu par une voix de la mauvaise langue, le plus souvent l'anglais.
 - Corrigé : le choix femme/homme était ignoré par les voix Windows, et Piper pouvait utiliser une
   voix du mauvais genre.
+- Corrigé : les raccourcis clavier ne fonctionnaient pas du tout. Arrêter devient Ctrl+Alt+Maj+S et
+  le panneau Ctrl+Alt+Maj+O, car K et P sont déjà pris dans Impress et Draw.
+- Corrigé : « Ouvrez d'abord un document » pouvait apparaître alors qu'un document était ouvert.
+- Corrigé : après un arrêt, la phrase restait sélectionnée ; la lecture ou l'export suivant ne portait
+  alors que sur elle, et une frappe pouvait la remplacer.
+- Corrigé : des réglages changés rapidement pendant la lecture pouvaient se perdre sous Windows.
 - Windows : toutes les voix installées sont disponibles, pas seulement les plus anciennes, avec un
   vrai réglage de la tonalité.
 - macOS : le genre de chaque voix vient désormais du système, pour toutes les langues.

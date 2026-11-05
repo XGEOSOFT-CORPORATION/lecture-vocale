@@ -1,3 +1,3 @@
 Lit à voix haute vos documents Writer, Calc, Impress et Draw : voix neuronales Piper hors ligne, Speech Dispatcher, eSpeak NG, voix Windows ou voix macOS. La voix suit la langue du texte. Lecture phrase par phrase avec surlignage, pause/reprise et export en WAV, MP3 ou OGG.
 Panneau de lecture : débit, tonalité et voix femme/homme réglables pendant la lecture.
-Raccourcis (Ctrl+Alt+Maj) : L lire/pause, K arrêter, P panneau, N/B phrase suivante/précédente, Page↑/Page↓ débit.
+Raccourcis (Ctrl+Alt+Maj) : L lire/pause, S arrêter, O panneau, N/B phrase suivante/précédente, Page↑/Page↓ débit.

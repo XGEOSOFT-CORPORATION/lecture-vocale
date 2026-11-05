@@ -1,11 +1,14 @@
 """Voice and language choice, without LibreOffice (the UNO modules are stubbed)."""
 
+import ast
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import threading
 import types
 import unittest
 from pathlib import Path
@@ -64,6 +67,12 @@ class PickVoiceTests(unittest.TestCase):
     def test_case_and_separator_do_not_matter(self):
         self.assertEqual(lv.pick_voice(WINDOWS_VOICES, "FR", "female")[0], "Hortense")
         self.assertEqual(lv.pick_voice([("A", "fr_CA", None)], "fr", "male"), ("A", True))
+
+    def test_two_codes_for_one_language(self):
+        self.assertEqual(lv.pick_voice([("Li", "cmn", "female")], "zh-CN", "female")[0], "Li")
+        self.assertEqual(lv.pick_voice([("Wei", "zh-CN", "male")], "cmn", "male")[0], "Wei")
+        self.assertEqual(lv.pick_voice([("Ola", "no", None)], "nb-NO", "male")[0], "Ola")
+        self.assertIsNone(lv.pick_voice([("Li", "cmn", "female")], "ja", "female")[0])
 
     def test_exact_region_wins_at_equal_gender(self):
         voices = [("F", "fr-FR", "female"), ("C", "fr-CA", "female")]
@@ -185,6 +194,13 @@ class EngineTests(unittest.TestCase):
         engine.voices = lambda: [("a", "pt-BR", None), ("b", "fr", None)]
         self.assertEqual(engine._language_option("pt-BR"), "pt-BR")
         self.assertEqual(engine._language_option("fr-CA"), "fr")
+
+    def test_spd_uses_the_code_its_voices_know(self):
+        engine = lv.SpdEngine(dict(lv.DEFAULTS))
+        engine.voices = lambda: [("Mandarin", "cmn", None), ("Norwegian", "nb", None)]
+        self.assertTrue(engine.supports("zh-CN"))
+        self.assertEqual(engine._language_option("zh-CN"), "cmn")
+        self.assertEqual(engine._language_option("no"), "nb")
 
     def test_spd_voice_only_for_its_language(self):
         engine = lv.SpdEngine(dict(lv.DEFAULTS, spd_voice="Marie"))
@@ -351,6 +367,135 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(lv.load_config()["language"], "fr")
 
 
+class AboutTests(unittest.TestCase):
+    def context(self, shell):
+        smgr = mock.MagicMock()
+        smgr.createInstanceWithContext.return_value = shell
+        return types.SimpleNamespace(ServiceManager=smgr)
+
+    def test_links_point_to_the_project(self):
+        self.assertEqual(lv.GITHUB_URL,
+                         "https://github.com/XGEOSOFT-CORPORATION/lecture-vocale")
+        self.assertEqual(lv.ISSUES_URL, lv.GITHUB_URL + "/issues")
+
+    def test_buttons_open_the_right_page(self):
+        shell = mock.MagicMock()
+        dialog = lv.AboutDialog.__new__(lv.AboutDialog)
+        dialog.ctx = self.context(shell)
+        dialog.on_action("issue")
+        dialog.on_action("star")
+        self.assertEqual([call.args[0] for call in shell.execute.call_args_list],
+                         [lv.ISSUES_URL, lv.GITHUB_URL])
+
+    def test_a_missing_browser_shows_the_address(self):
+        shell = mock.MagicMock()
+        shell.execute.side_effect = RuntimeError("no browser")
+        with mock.patch.object(lv, "msgbox") as box:
+            lv.open_url(self.context(shell), lv.GITHUB_URL)
+        self.assertIn(lv.GITHUB_URL, box.call_args[0][1])
+
+    def test_errors_mention_github_and_other_messages_do_not(self):
+        with mock.patch.object(lv, "log") as log:
+            lv.msgbox(None, "Panne", "errorbox")
+            self.assertIn(lv.ISSUES_URL, log.call_args[0][1])
+            lv.msgbox(None, "Terminé")
+            self.assertNotIn(lv.ISSUES_URL, log.call_args[0][1])
+
+
+class InterfaceLanguageTests(unittest.TestCase):
+    CODES = [code for code, name in lv.UI_LANGUAGES]
+
+    def tearDown(self):
+        lv._UI.update(language="fr", strings={})
+
+    def test_follows_libreoffice_by_default(self):
+        self.assertEqual(lv.resolve_ui_language("auto", "de"), "de")
+        self.assertEqual(lv.resolve_ui_language("auto", "pt-BR"), "pt")
+        self.assertEqual(lv.resolve_ui_language("auto", "fr-CA"), "fr")
+
+    def test_unknown_language_falls_back_to_english(self):
+        self.assertEqual(lv.resolve_ui_language("auto", "ja"), "en")
+        self.assertEqual(lv.resolve_ui_language("auto", ""), "en")
+
+    def test_the_option_beats_libreoffice(self):
+        self.assertEqual(lv.resolve_ui_language("es", "de"), "es")
+
+    def test_every_language_is_complete_and_has_the_same_placeholders(self):
+        placeholder = re.compile(r"%[-+ 0]*\d*[sd%]")
+        english = lv.load_ui_strings("en")
+        self.assertGreater(len(english), 100)
+        for code in self.CODES[1:]:
+            table = lv.load_ui_strings(code)
+            self.assertEqual(set(table), set(english), code)
+            for source, text in table.items():
+                self.assertTrue(text.strip(), (code, source))
+                self.assertEqual(placeholder.findall(source), placeholder.findall(text),
+                                 (code, source))
+
+    def test_every_text_of_the_code_is_translated(self):
+        tree = ast.parse((ROOT / "extension" / "python" / "lecture_vocale.py")
+                         .read_text(encoding="utf-8"))
+        used = {node.args[0].value for node in ast.walk(tree)
+                if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "_"
+                and node.args and isinstance(node.args[0], ast.Constant)}
+        used |= set(lv.MENU_TITLES.values()) | set(lv._ENGINE_LABELS.values()) - {
+            "Speech Dispatcher (spd-say)", "eSpeak NG / MBROLA"}
+        self.assertEqual(sorted(used - set(lv.load_ui_strings("en"))), [])
+
+    def test_the_translation_function_is_never_shadowed(self):
+        tree = ast.parse((ROOT / "extension" / "python" / "lecture_vocale.py")
+                         .read_text(encoding="utf-8"))
+        shadows = [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Name)
+                   and node.id == "_" and isinstance(node.ctx, ast.Store)]
+        self.assertEqual(shadows, [])
+
+    def test_menus_are_available_in_every_language(self):
+        text = (ROOT / "extension" / "Addons.xcu").read_text(encoding="utf-8")
+        total = text.count('xml:lang="fr"')
+        self.assertGreater(total, 18)
+        for code in ("en-US", "es", "de", "it", "pt"):
+            self.assertEqual(text.count('xml:lang="%s"' % code), total, code)
+
+    def test_translation_is_applied(self):
+        lv._UI.update(language="de", strings=lv.load_ui_strings("de"))
+        self.assertEqual(lv._("Fermer"), "Schließen")
+        with mock.patch.object(lv, "log") as log:
+            lv.msgbox(None, "x", "errorbox")
+        self.assertIn("Wenn das Problem", log.call_args[0][1])
+
+    def test_gender_warning_is_a_whole_sentence(self):
+        lv._UI.update(language="en", strings=lv.load_ui_strings("en"))
+        with mock.patch.object(lv, "_which", side_effect=lambda *names: names[0]):
+            engine = lv.EspeakEngine(dict(lv.DEFAULTS, gender="male"))
+        engine.note_missing_gender("fr")
+        self.assertEqual(engine.take_warning(),
+                         'eSpeak NG has no male voice for the language "fr": '
+                         "a female voice is used.")
+
+
+class ConfigConcurrencyTests(unittest.TestCase):
+    def test_no_change_is_lost_while_others_read(self):
+        self.addCleanup(lambda: os.path.exists(lv.CONFIG_FILE) and os.remove(lv.CONFIG_FILE))
+        stop = threading.Event()
+
+        def keep_reading():
+            while not stop.is_set():
+                lv.load_config()
+
+        readers = [threading.Thread(target=keep_reading) for _ in range(4)]
+        for reader in readers:
+            reader.start()
+        try:
+            with mock.patch.object(lv, "log") as log:
+                for value in range(-10, 11):
+                    self.assertEqual(lv.update_config(pitch=value)["pitch"], value)
+            log.assert_not_called()
+        finally:
+            stop.set()
+            for reader in readers:
+                reader.join()
+
+
 class LocaleTests(unittest.TestCase):
     @staticmethod
     def holder(language, country="", variant=""):
@@ -487,6 +632,10 @@ class BuildTests(unittest.TestCase):
         text = (ROOT / "extension" / "description.xml").read_text(encoding="utf-8")
         self.assertIn('lo:value="24.2"', text)
         self.assertIn('identifier value="com.adanalytics.lecturevocale"', text)
+
+    def test_shortcuts_use_the_real_configuration_name(self):
+        text = (ROOT / "extension" / "Accelerators.xcu").read_text(encoding="utf-8")
+        self.assertIn('oor:name="Accelerators"', text)
 
     def test_versions_agree(self):
         text = (ROOT / "extension" / "description.xml").read_text(encoding="utf-8")

@@ -109,7 +109,9 @@ def main():
     voices = lv.spd_voices(lv._which("spd-say"))
     languages = {lv.primary_language(voice[1]) for voice in voices}
     check("voices are listed", len(voices) > 20, "%d voices" % len(voices))
-    for language in ("fr", "en", "ar", "ru", "zh", "hi", "de", "es"):
+    for language in ("fr", "en-US", "en-GB", "ar", "ru", "zh-CN", "zh-TW", "ja", "ko", "hi",
+                     "de", "es", "pt-BR", "it", "nl", "pl", "tr", "vi", "sv", "nb", "he", "th",
+                     "id", "sw", "el", "uk"):
         check("language available: " + language,
               lv.SpdEngine(dict(lv.DEFAULTS), language).supports(language))
     print("languages:", len(languages), flush=True)
@@ -142,6 +144,12 @@ def main():
 
     arabic = speak("arabic", "مرحبا بالعالم، هذا اختبار للصوت", "ar")
     check("non-Latin text is spoken", len(arabic) > 8000, "%d samples" % len(arabic))
+
+    for name, text, language in (("chinese", "你好世界，这是一个声音测试", "zh-CN"),
+                                 ("japanese", "こんにちは世界、これはテストです", "ja"),
+                                 ("russian", "Привет, мир, это проверка голоса", "ru")):
+        spoken = speak(name, text, language)
+        check("spoken: " + language, len(spoken) > 8000, "%d samples" % len(spoken))
 
     print("FAILED: %s" % failures if failures else "ALL PASSED", flush=True)
     sys.exit(1 if failures else 0)
