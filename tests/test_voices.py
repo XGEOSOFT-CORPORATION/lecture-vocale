@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import types
 import unittest
 import zipfile
@@ -252,7 +253,8 @@ class EngineTests(unittest.TestCase):
         script = engine._script("t.txt", None, "fr-FR")
         self.assertIn("Wait(60000)", script)
         self.assertNotIn("Wait(-1)", script)
-        self.assertTrue(script.endswith("[Environment]::Exit(0)"))
+        # [Environment]::Exit makes every sentence 7 seconds longer.
+        self.assertNotIn("Exit(", script)
 
     def test_sapi_script_never_hardcodes_the_ssml_language(self):
         engine = self.sapi(WINDOWS_VOICES, "en-US")
@@ -617,8 +619,10 @@ class SapiAudioTests(unittest.TestCase):
         for voice in lv.sapi_voices():
             engine = lv.SapiEngine(dict(lv.DEFAULTS, voice=voice[0]), voice[1])
             command, _ = engine.speak_command("Oui", voice[1])
+            start = time.monotonic()
             result = subprocess.run(command, capture_output=True, timeout=60)
             self.assertEqual((voice[0], result.returncode, result.stderr), (voice[0], 0, b""))
+            self.assertLess(time.monotonic() - start, 6, voice[0])
 
     def test_a_failing_script_is_not_silent(self):
         voices = [("No Such Voice", "fr-FR", "sapi")]

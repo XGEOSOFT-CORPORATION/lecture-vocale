@@ -858,8 +858,6 @@ class EspeakEngine(Engine):
 
 
 _SAPI_VOICES = []
-# Une fin de script ordinaire peut rester bloquée dans le nettoyage des objets vocaux.
-_EXIT_NOW = "[Environment]::Exit(0)"
 
 
 _WINRT_SYNTH = "[Windows.Media.SpeechSynthesis.SpeechSynthesizer]"
@@ -965,7 +963,6 @@ class SapiEngine(Engine):
         else:
             lines.append("(New-Object Media.SoundPlayer (New-Object IO.MemoryStream(,$b)))"
                          ".PlaySync()")
-        lines.append(_EXIT_NOW)
         return "; ".join(lines)
 
     def _script(self, text_file, wav_path=None, language=None):
@@ -992,7 +989,6 @@ class SapiEngine(Engine):
                      "'</prosody></speak>'" % (self.pitch * 5))
         lines.append("$s.SpeakSsml($x)")
         lines.append("$s.Dispose()")
-        lines.append(_EXIT_NOW)
         return "; ".join(lines)
 
     def _text_file(self, text):
@@ -2385,14 +2381,9 @@ class ReadingPanel(_DialogBase):
 
     @classmethod
     def show(cls, ctx):
-        panel = cls.instance
-        if panel is not None:
-            try:
-                panel.dialog.setVisible(True)
-                panel.sync()
-                return panel
-            except Exception:
-                cls.instance = None
+        # Toujours un panneau neuf : l'ancien disparaît avec le document auquel il était attaché.
+        if cls.instance is not None:
+            cls.instance.close()
         panel = cls(ctx)
         cls.instance = panel
         panel.dialog.setVisible(True)
