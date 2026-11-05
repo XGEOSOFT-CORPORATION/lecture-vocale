@@ -142,6 +142,32 @@ class EngineTests(unittest.TestCase):
                                 ("mb-fr4", "fr", "mb-fr4")]
         self.addCleanup(lv._ESPEAK_VOICES.clear)
 
+    def test_spd_cancels_before_any_kill(self):
+        """spd-say killed during a sentence makes the next messages end at once."""
+        engine = lv.SpdEngine(dict(lv.DEFAULTS))
+        process = mock.Mock()
+        with mock.patch.object(lv.subprocess, "run") as run:
+            engine.end_process(process)
+        self.assertEqual(run.call_args[0][0][1:], ["-C"])
+        process.wait.assert_called_once()
+        process.kill.assert_not_called()
+
+    def test_spd_kills_only_a_process_that_ignores_the_cancel(self):
+        engine = lv.SpdEngine(dict(lv.DEFAULTS))
+        process = mock.Mock()
+        process.wait.side_effect = subprocess.TimeoutExpired("spd-say", 1)
+        with mock.patch.object(lv.subprocess, "run"):
+            engine.end_process(process)
+        process.kill.assert_called_once()
+
+    def test_new_settings_leave_the_process_to_the_reading_loop(self):
+        engine = mock.Mock()
+        reader = lv.Reader(None, engine, [])
+        reader.proc = mock.Mock()
+        reader.request_restart()
+        self.assertTrue(reader.restart_evt.is_set())
+        engine.end_process.assert_not_called()
+
     def test_espeak_follows_the_text(self):
         engine = lv.EspeakEngine(dict(lv.DEFAULTS))
         self.assertEqual(engine.voice("en-GB"), "en")

@@ -207,6 +207,31 @@ def controls(ctx, desktop):
     doc.close(True)
 
 
+def live_pitch(ctx, desktop):
+    """Changing the pitch rereads the current sentence: no sentence may be skipped."""
+    doc = open_document(desktop, "swriter")
+    text = doc.getText()
+    cursor = text.createTextCursor()
+    cursor.setPropertyValue("CharLocale", FRENCH)
+    sentence = "Cette phrase est assez longue pour durer plusieurs secondes quand elle est lue. "
+    text.insertString(cursor, sentence * 40, False)
+    frame = doc.getCurrentController().getFrame()
+    offset = len(log_text())
+    dispatch(ctx, frame, "readall")
+    wait_for_log("langues:", offset)
+    time.sleep(1.5)
+    for command in ("pitchup", "pitchup", "pitchdown", "pitchdown"):
+        dispatch(ctx, frame, command)
+        time.sleep(0.7)
+    time.sleep(2)
+    dispatch(ctx, frame, "stop")
+    wait_for_log("lecture terminée", offset)
+    match = re.search(r"lecture terminée: index=(\d+)/40", log_text()[offset:])
+    check("Pitch change skips no sentence", match is not None and int(match.group(1)) <= 2,
+          match.group(0) if match else log_text()[offset:][-200:])
+    doc.close(True)
+
+
 def every_voice(ctx, desktop):
     """Each voice of the list reads a real document, to the end, and gets exported."""
     offset = len(log_text())
@@ -236,7 +261,9 @@ def every_voice(ctx, desktop):
         dispatch(ctx, frame, "readall")
         finished = wait_for_log("index=3/3 ok=True", offset, 40)
         line = next((item for item in log_text()[offset:].splitlines() if "langues:" in item), "")
-        check("Voice reads a document: " + name, finished and name in line, line[-90:])
+        # A Piper voice is listed by its path, and logged by its file name.
+        shown = os.path.splitext(os.path.basename(name))[0]
+        check("Voice reads a document: " + name, finished and shown in line, line[-90:])
         check("Voice shows no error: " + name, "errorbox" not in log_text()[offset:])
         if os.environ.get("LV_EXPECT_ENGINE") == "sapi":
             offset = len(log_text())
@@ -417,8 +444,8 @@ def main():
     print("python", sys.version.split()[0], flush=True)
     configuration(ctx)
     guide(ctx)
-    for scenario in (writer, controls, every_voice, close_while_reading, scripts, interface, calc,
-                     impress):
+    for scenario in (writer, controls, live_pitch, every_voice, close_while_reading, scripts,
+                     interface, calc, impress):
         try:
             scenario(ctx, desktop)
         except Exception as error:

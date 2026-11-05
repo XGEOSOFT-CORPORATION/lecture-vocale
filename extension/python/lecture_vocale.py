@@ -611,6 +611,13 @@ class Engine(object):
     def stop_all(self):
         pass
 
+    def end_process(self, proc):
+        """Interrompt le processus qui lit."""
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
 
 class PiperEngine(Engine):
     key, label = "piper", "Piper"
@@ -752,6 +759,14 @@ class SpdEngine(Engine):
             subprocess.run([self.bin, "-C"], timeout=5, capture_output=True)
         except Exception:
             pass
+
+    def end_process(self, proc):
+        """Annule d'abord : spd-say tué en pleine phrase, les messages suivants sont perdus."""
+        self.stop_all()
+        try:
+            proc.wait(1)
+        except subprocess.TimeoutExpired:
+            Engine.end_process(self, proc)
 
 
 def parse_spd_voices(output):
@@ -1599,10 +1614,7 @@ class Reader(threading.Thread):
         with self.lock:
             proc = self.proc
         if proc is not None and proc.poll() is None:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+            self.engine.end_process(proc)
 
     def stop(self):
         self.stop_evt.set()
@@ -1610,9 +1622,11 @@ class Reader(threading.Thread):
         self.engine.stop_all()
 
     def request_restart(self):
-        """Nouveaux réglages : la phrase en cours est relue avec eux."""
+        """Nouveaux réglages : la phrase en cours est relue avec eux.
+
+        _run interrompt le processus : le faire ici pourrait toucher celui de la phrase relue.
+        """
         self.restart_evt.set()
-        self._kill_current()
 
     def jump(self, delta):
         with self.lock:
@@ -1646,12 +1660,7 @@ class Reader(threading.Thread):
                 status = RESTART
             else:
                 continue
-            try:
-                proc.kill()
-            except Exception:
-                pass
-            if status == RESTART:
-                self.engine.stop_all()
+            self.engine.end_process(proc)
             break
         proc.wait()
         with self.lock:
@@ -2458,11 +2467,11 @@ class SettingsDialog(_DialogBase):
         self._add("FixedLine", "fl2", L, y, self.W - 16, 8, Label=_("Réglages par défaut"))
         y += 12
         self._add("FixedText", "lSpeed", L, y + 2, 86, 10, Label=_("Débit (%)"))
-        self._add("NumericField", "speed", F, y, 40, 13, ValueMin=float(SPEED_MIN),
+        self._add("NumericField", "speed", F, y, 56, 13, ValueMin=float(SPEED_MIN),
                   ValueMax=float(SPEED_MAX), ValueStep=float(SPEED_STEP), DecimalAccuracy=0,
                   Spin=True, StrictFormat=True)
-        self._add("FixedText", "lPitch", F + 50, y + 2, 38, 10, Label=_("Tonalité"))
-        self._add("NumericField", "pitch", F + 90, y, 36, 13, ValueMin=float(PITCH_MIN),
+        self._add("FixedText", "lPitch", F + 66, y + 2, 38, 10, Label=_("Tonalité"))
+        self._add("NumericField", "pitch", F + 106, y, 56, 13, ValueMin=float(PITCH_MIN),
                   ValueMax=float(PITCH_MAX), ValueStep=1.0, DecimalAccuracy=0, Spin=True,
                   StrictFormat=True)
         y += 17
